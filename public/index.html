@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TreeDB - 树形结构数据库管理工具</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📁</text></svg>">
+
+  <!-- CSS Files -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/components/tree.css">
+  <link rel="stylesheet" href="css/components/controls.css">
+  <link rel="stylesheet" href="css/components/details.css">
+  <link rel="stylesheet" href="css/components/modals.css">
+</head>
+<body>
+  <header>
+    <h1>TreeDB</h1>
+    <div class="theme-selector">
+      <label for="themeSelect">主题:</label>
+      <select id="themeSelect">
+        <option value="system">跟随系统</option>
+        <option value="light">浅色</option>
+        <option value="dark">深色</option>
+      </select>
+    </div>
+  </header>
+
+  <div class="menu-bar-container">
+    <div class="menu-bar">
+      <div class="menu-dropdown" id="nodeMenu">
+        <button type="button">节点操作</button>
+        <div class="menu-dropdown-content">
+          <button id="addRoot" class="menu-item">
+            <span>添加根节点</span>
+            <span class="menu-shortcut">Ctrl+N</span>
+          </button>
+          <div class="menu-separator"></div>
+          <button id="undo" class="menu-item" disabled>
+            <span>撤销</span>
+            <span class="menu-shortcut">Ctrl+Z</span>
+          </button>
+          <button id="rebalanceSort" class="menu-item" disabled style="display: none !important;">
+            <span>重排排序</span>
+            <span class="menu-shortcut">Ctrl+Shift+R</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="menu-dropdown" id="viewMenu">
+        <button type="button">视图</button>
+        <div class="menu-dropdown-content">
+          <button id="expandAll" class="menu-item">
+            <span>展开全部</span>
+            <span class="menu-shortcut"></span>
+          </button>
+          <div class="menu-separator"></div>
+          <button id="exportData" class="menu-item">
+            <span>导出JSON</span>
+            <span class="menu-shortcut"></span>
+          </button>
+          <div class="menu-separator"></div>
+          <button id="resetLayout" class="menu-item">
+            <span>重置布局</span>
+            <span class="menu-shortcut"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="app">
+    <div id="leftColumn">
+      <section id="controlPanelSection">
+        <h2>功能面板</h2>
+        <div class="section-content column">
+          <p class="warning">请先运行 <code>python server.py</code> 启动接口；操作会直接读写 SQLite（默认 treedb.sqlite）。</p>
+          <div class="control-panel-toggle">
+            <select id="controlPanelMode">
+              <option value="config">数据源配置</option>
+              <option value="search">节点搜索</option>
+            </select>
+          </div>
+          <div id="configPanel" class="control-panel">
+            <form id="configForm" class="config-form">
+              <div class="config-grid">
+                <div class="field-group">
+                  <label for="configDbPath">数据库文件路径</label>
+                  <div class="input-with-button">
+                    <input type="text" id="configDbPath" name="db_path" placeholder="C:\\path\\to\\database.db" required>
+                    <button type="button" id="configBrowseDb">浏览...</button>
+                  </div>
+                </div>
+
+                <div class="field-group">
+                  <label for="configTableName">表名</label>
+                  <div class="input-with-button">
+                    <input type="text" id="configTableName" name="table_name" placeholder="tool" list="configTableSuggestions" required>
+                    <button type="button" id="configFetchTables">列出表</button>
+                  </div>
+                  <datalist id="configTableSuggestions"></datalist>
+                </div>
+
+                <div class="form-row">
+                  <div class="field-group">
+                    <label for="configIdField">主键字段</label>
+                    <input type="text" id="configIdField" name="id_field" placeholder="id" required>
+                  </div>
+
+                  <div class="field-group">
+                    <label for="configParentField">父节点字段</label>
+                    <input type="text" id="configParentField" name="parent_field" placeholder="parent_id" required>
+                  </div>
+                </div>
+
+                <div class="field-group checkbox-group">
+                  <div class="checkbox-label">
+                    <input type="checkbox" id="configAutoBootstrap" name="auto_bootstrap">
+                    <span class="checkbox-text">首次自动创建示例数据</span>
+                  </div>
+                </div>
+              </div>
+              <div class="config-actions">
+                <button type="submit" class="primary">应用配置</button>
+                <button type="button" id="configRefresh">刷新配置</button>
+              </div>
+              <p id="configSessionWarning" class="warning" hidden>当前数据源已在其他标签页使用，请先关闭相关页面或释放会话。</p>
+              <small>更改后会立即重新加载元数据与树数据。</small>
+            </form>
+          </div>
+          <div id="searchPanel" class="control-panel" hidden>
+            <div class="search-panel">
+              <div class="tree-toolbar search-toolbar">
+                <div class="search-input-row">
+                  <input type="search" id="treeSearch" placeholder="搜索节点..." autocomplete="off">
+                  <button type="button" id="clearTreeSearch" disabled>清除</button>
+                </div>
+                <div class="search-nav-row">
+                  <button type="button" id="treeSearchPrev" disabled>上一个</button>
+                  <span id="treeSearchInfo" class="tree-search-info"></span>
+                  <button type="button" id="treeSearchNext" disabled>下一个</button>
+                </div>
+              </div>
+              <div id="searchResults" class="search-results"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="panel-resizer" id="leftResizer"></div>
+
+    <section id="treePane">
+      <h2>树形结构</h2>
+      <div class="section-content">
+        <!-- Tree toolbar is now empty, buttons moved to node details and menu -->
+        <div class="section-content" id="treePaneContent">
+          <div id="treeContainer"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="panel-resizer" id="rightResizer"></div>
+
+    <section id="detailsPaneSection">
+      <div class="section-heading">
+        <h2>节点详情</h2>
+        <span id="detailsActiveNode" class="details-chip" hidden></span>
+      </div>
+      <div class="section-content">
+        <div id="detailsPane">
+          <div class="tree-empty-state" id="detailsEmpty">选择一个节点以查看和编辑详情</div>
+          <form id="detailsForm" hidden>
+            <!-- Dynamic form fields will be inserted here -->
+          </form>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- JavaScript Files -->
+  <script type="module" src="js/main.js"></script>
+  <script>
+    // 菜单下拉功能初始化
+    document.addEventListener('DOMContentLoaded', () => {
+      const dropdowns = document.querySelectorAll('.menu-dropdown');
+
+      dropdowns.forEach(dropdown => {
+        const button = dropdown.querySelector('button');
+        const content = dropdown.querySelector('.menu-dropdown-content');
+
+        if (!button || !content) return;
+
+        // 点击按钮切换下拉菜单
+        button.addEventListener('click', (e) => {
+          e.stopPropagation();
+
+          // 关闭其他所有下拉菜单
+          dropdowns.forEach(other => {
+            if (other !== dropdown) {
+              other.classList.remove('show');
+            }
+          });
+
+          // 切换当前下拉菜单
+          dropdown.classList.toggle('show');
+        });
+
+        // 点击菜单项时关闭下拉菜单
+        const menuItems = content.querySelectorAll('.menu-item');
+        menuItems.forEach(item => {
+          item.addEventListener('click', () => {
+            dropdown.classList.remove('show');
+          });
+        });
+      });
+
+      // 点击页面其他地方时关闭所有下拉菜单
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.menu-dropdown')) {
+          dropdowns.forEach(dropdown => {
+            dropdown.classList.remove('show');
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+/**
+ * CSS Custom Properties (Variables)
+ * CSS自定义属性定义
+ * 遵循DRY原则，消除魔法数字
+ */
+
+:root {
+  /* ==================== Colors ==================== */
+  /* Light Theme Colors */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-light: #dbeafe;
+
+  --color-secondary: #64748b;
+  --color-secondary-hover: #475569;
+
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+  --color-info: #0891b2;
+
+  --color-background: #ffffff;
+  --color-surface: #f8fafc;
+  --color-surface-hover: #f1f5f9;
+
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  --color-text-inverse: #ffffff;
+
+  --color-border: #e2e8f0;
+  --color-border-hover: #cbd5e1;
+  --color-border-focus: var(--color-primary);
+
+  /* Dark Theme Colors */
+  --color-dark-background: #0f172a;
+  --color-dark-surface: #1e293b;
+  --color-dark-surface-hover: #334155;
+
+  --color-dark-text-primary: #f1f5f9;
+  --color-dark-text-secondary: #cbd5e1;
+  --color-dark-text-muted: #64748b;
+
+  --color-dark-border: #334155;
+  --color-dark-border-hover: #475569;
+
+  /* ==================== Spacing ==================== */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+
+  /* ==================== Typography ==================== */
+  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-family-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+
+  --font-size-xs: 0.75rem;     /* 12px */
+  --font-size-sm: 0.875rem;    /* 14px */
+  --font-size-base: 1rem;      /* 16px */
+  --font-size-lg: 1.125rem;    /* 18px */
+  --font-size-xl: 1.25rem;     /* 20px */
+  --font-size-2xl: 1.5rem;     /* 24px */
+  --font-size-3xl: 1.875rem;   /* 30px */
+  --font-size-4xl: 2.25rem;    /* 36px */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ==================== Layout ==================== */
+  --sidebar-width: 320px;
+  --sidebar-collapsed-width: 0;
+  --control-panel-width: 280px;
+  --control-panel-collapsed-width: 48px;
+
+  --header-height: 48px;
+  --footer-height: 40px;
+
+  --layout-min-width: 800px;
+  --layout-max-width: 1600px;
+  --layout-container-padding: var(--spacing-lg);
+
+  /* ==================== Borders & Shadows ==================== */
+  --border-radius-sm: 4px;
+  --border-radius-md: 6px;
+  --border-radius-lg: 8px;
+  --border-radius-xl: 12px;
+  --border-radius-full: 9999px;
+
+  --border-width: 1px;
+  --border-width-2: 2px;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  /* ==================== Transitions ==================== */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+
+  --transition-all: all var(--transition-normal);
+  --transition-colors: color var(--transition-normal),
+                      background-color var(--transition-normal),
+                      border-color var(--transition-normal);
+  --transition-opacity: opacity var(--transition-normal);
+  --transition-transform: transform var(--transition-normal);
+
+  /* ==================== Z-Index ==================== */
+  --z-dropdown: 1000;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+  --z-toast: 9999;
+
+  /* ==================== Components ==================== */
+  /* Button */
+  --button-height-sm: 32px;
+  --button-height-md: 40px;
+  --button-height-lg: 48px;
+  --button-padding-x: var(--spacing-md);
+  --button-font-weight: var(--font-weight-medium);
+
+  /* Input */
+  --input-height-sm: 32px;
+  --input-height-md: 40px;
+  --input-height-lg: 48px;
+  --input-padding-x: var(--spacing-md);
+  --input-border-width: var(--border-width);
+  --input-border-radius: var(--border-radius-md);
+
+  /* Tree */
+  --tree-node-height: 32px;
+  --tree-node-indent: 24px;
+  --tree-node-padding: var(--spacing-sm);
+  --tree-toggle-size: 20px;
+  --tree-drag-handle-width: 16px;
+
+  /* Modal */
+  --modal-backdrop: rgba(0, 0, 0, 0.5);
+  --modal-width-sm: 400px;
+  --modal-width-md: 600px;
+  --modal-width-lg: 800px;
+  --modal-width-xl: 1000px;
+  --modal-padding: var(--spacing-lg);
+
+  /* ==================== Responsive ==================== */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  /* ==================== Animations ==================== */
+  --animation-fade-in: fadeIn var(--transition-normal) ease;
+  --animation-fade-out: fadeOut var(--transition-normal) ease;
+  --animation-slide-in-up: slideInUp var(--transition-normal) ease;
+  --animation-slide-out-down: slideOutDown var(--transition-normal) ease;
+  --animation-bounce-in: bounceIn 0.6s ease;
+}
+
+/* Dark Theme Overrides */
+[data-theme="dark"] {
+  /* Colors */
+  --color-background: var(--color-dark-background);
+  --color-surface: var(--color-dark-surface);
+  --color-surface-hover: var(--color-dark-surface-hover);
+
+  --color-text-primary: var(--color-dark-text-primary);
+  --color-text-secondary: var(--color-dark-text-secondary);
+  --color-text-muted: var(--color-dark-text-muted);
+
+  --color-border: var(--color-dark-border);
+  --color-border-hover: var(--color-dark-border-hover);
+
+  /* Shadows - adjust for dark theme */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+
+  /* Modal backdrop for dark theme */
+  --modal-backdrop: rgba(0, 0, 0, 0.7);
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  :root {
+    --color-border: #000000;
+    --color-text-primary: #000000;
+    --color-background: #ffffff;
+
+    [data-theme="dark"] {
+      --color-border: #ffffff;
+      --color-text-primary: #ffffff;
+      --color-background: #000000;
+    }
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: 0ms;
+    --transition-normal: 0ms;
+    --transition-slow: 0ms;
+  }
+}
