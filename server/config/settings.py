@@ -96,6 +96,7 @@ class ConfigManager:
         self.TABLE_NAME = self._config['TABLE_NAME']
         self.ID_FIELD = self._config['ID_FIELD']
         self.PARENT_FIELD = self._config['PARENT_FIELD']
+        self.AUTO_BOOTSTRAP = self._config.get('AUTO_BOOTSTRAP', False)
 
     def update_server_config(self, new_config: Dict[str, Any]) -> Dict[str, Any]:
         """更新服务器配置"""

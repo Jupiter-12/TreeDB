@@ -195,7 +195,7 @@ section h2 {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  padding: 12px 16px 12px 32px;
+  padding: 8px 16px 8px 32px;
   background: linear-gradient(to bottom, var(--surface), var(--surface-alt));
   border-bottom: 1px solid var(--border);
   display: flex;
@@ -222,6 +222,11 @@ section h2::before {
   padding: 12px 16px;
 }
 
+/* 控制面板内容减少间距 */
+#controlPanelSection .section-content {
+  padding: 6px 12px;
+}
+
 .section-content.column {
   display: flex;
   flex-direction: column;
@@ -245,7 +250,7 @@ section h2::before {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  padding: 12px 16px 12px 32px;
+  padding: 8px 16px 8px 32px;
   position: relative;
   flex: 1;
 }
@@ -288,6 +293,16 @@ section h2::before {
   pointer-events: auto !important;
   z-index: 1;
   position: relative;
+  cursor: pointer !important;
+}
+
+/* 确保按钮可以点击 */
+#configBrowseDb,
+#configFetchTables,
+#configRefresh {
+  pointer-events: auto !important;
+  z-index: 10 !important;
+  position: relative !important;
 }
 
 /* Left Column */
@@ -354,8 +369,13 @@ section h2::before {
   min-width: 150px;
 }
 
+/* 树面板使用与控制面板相同的边距 */
 #treePane .section-content {
-  padding-right: 4px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 #treeContainer {
@@ -423,9 +443,11 @@ form {
 
 /* Menu Bar - !important added to ensure styles are applied */
 .menu-bar-container {
-  background: var(--surface) !important;
-  border-bottom: 1px solid var(--border) !important;
-  padding: 0 8px !important;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 var(--spacing-sm);
+  position: relative;
+  z-index: 100;
 }
 
 .menu-bar {
@@ -455,20 +477,23 @@ form {
 }
 
 .menu-dropdown-content {
-  display: none !important;
-  position: absolute !important;
-  top: 100% !important;
-  left: 0 !important;
-  min-width: 200px !important;
-  background: var(--surface) !important;
-  border: 1px solid var(--border) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-  z-index: 1000 !important;
-  padding: 4px 0 !important;
-  border-radius: 4px !important;
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-dropdown);
+  padding: var(--spacing-xs) 0;
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
 }
 
-.menu-dropdown.show .menu-dropdown-content {
+
+.menu-dropdown.show .menu-dropdown-content,
+div.menu-dropdown.show > .menu-dropdown-content {
   display: block !important;
 }
 
@@ -477,39 +502,44 @@ form {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 8px 16px;
+  padding: var(--spacing-sm) var(--spacing-md);
   background: transparent;
   border: none;
   text-align: left;
   cursor: pointer;
-  color: var(--fg);
-  font-size: 13px;
-  transition: background-color 0.2s;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  transition: var(--transition-colors);
+  white-space: nowrap;
 }
 
-.menu-item:hover {
-  background: var(--surface-hover);
+.menu-item:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
 }
 
 .menu-item:disabled {
-  color: var(--muted-soft);
+  color: var(--color-text-muted);
   cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .menu-item:disabled:hover {
   background: transparent;
 }
 
-.menu-separator {
-  height: 1px;
-  background: var(--border);
-  margin: 4px 0;
+.menu-shortcut {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-left: var(--spacing-lg);
 }
 
-.menu-shortcut {
-  color: var(--muted);
-  font-size: 12px;
+.menu-separator {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--spacing-xs) 0;
 }
+
 
 /* Utility Classes */
 .hidden {

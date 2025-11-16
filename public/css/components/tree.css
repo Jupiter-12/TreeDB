@@ -1,0 +1,165 @@
+/**
+ * Tree Component Styles
+ * 树形组件样式
+ */
+
+/* Tree Container */
+#treeContainer {
+  height: 100%;
+  overflow: visible;  /* 不在这里处理滚动 */
+  padding: 0;
+}
+
+/* Tree Root */
+.tree-root {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Tree root 的第一个节点不要��上边距 */
+.tree-root > .tree-node:first-child {
+  margin-top: 0;
+}
+
+/* Tree Node */
+.tree-node {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tree-node-content {
+  display: flex;
+  align-items: center;
+  min-height: var(--tree-node-height);
+  padding: 0;
+  cursor: pointer;
+  user-select: none;
+  transition: var(--transition-colors);
+  width: 100%;
+}
+
+.tree-node-content:hover {
+  background: var(--color-surface-hover);
+}
+
+.tree-node-content.selected {
+  background: var(--color-primary-light);
+}
+
+/* Node Toggle */
+.tree-toggle {
+  width: var(--tree-toggle-size);
+  height: var(--tree-toggle-size);
+  margin-right: var(--spacing-xs);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: bold;
+  transition: transform var(--transition-fast);
+}
+
+.tree-toggle.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* Tree Spacer */
+.tree-spacer {
+  width: var(--tree-toggle-size);
+  height: var(--tree-toggle-size);
+  margin-right: var(--spacing-xs);
+  display: inline-block;
+}
+
+/* Toggle和Spacer的右边距调整 */
+.tree-toggle,
+.tree-spacer {
+  margin-right: 6px;
+}
+
+.tree-node-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  /* 不设置固定宽度，让内容自然决定宽度 */
+}
+
+/* Drag Handle */
+.tree-node-drag-handle {
+  width: var(--tree-drag-handle-width);
+  height: var(--tree-node-height);
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.tree-node:hover .tree-node-drag-handle {
+  opacity: 1;
+}
+
+/* Children Container */
+.tree-children {
+  margin-left: 0;
+  list-style: none;
+  padding: 0;
+  margin-top: 0;
+}
+
+/* Empty State */
+.tree-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.tree-empty-icon {
+  font-size: 48px;
+  margin-bottom: var(--spacing-md);
+  opacity: 0.5;
+}
+
+/* Search Highlight */
+.tree-node.search-highlight {
+  background: rgba(255, 235, 59, 0.3);
+}
+
+.tree-node.search-selected {
+  background: rgba(255, 193, 7, 0.5);
+}
+
+/* Loading State */
+.tree-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--spacing-sm);
+  color: var(--color-text-muted);
+}
+
+.tree-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

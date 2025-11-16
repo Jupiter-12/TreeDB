@@ -105,8 +105,14 @@ class DatabaseService:
         columns = [col[1] for col in cursor.fetchall()]
 
         if column_name not in columns:
-            cursor.execute(f"ALTER TABLE {config.table_name} ADD COLUMN {column_name} {column_def}")
-            return True
+            try:
+                cursor.execute(f"ALTER TABLE {config.table_name} ADD COLUMN {column_name} {column_def}")
+                return True
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" in str(e).lower():
+                    # Column already exists (likely due to race condition)
+                    return False
+                raise
         return False
 
     def refresh_column_types(self, db_path: Optional[Path] = None) -> None:
@@ -293,6 +299,8 @@ class DatabaseService:
         path = db_path or self._db_path
 
         with self.get_connection(path) as conn:
+            # 先设置 row_factory
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
             # 检查是否有排序列
@@ -309,7 +317,6 @@ class DatabaseService:
             query = f"SELECT * FROM {config.table_name} ORDER BY {order_by}"
             cursor.execute(query)
 
-            conn.row_factory = sqlite3.Row
             return [dict(row) for row in cursor.fetchall()]
 
     def create_node(self, data: Dict[str, Any],
@@ -349,6 +356,23 @@ class DatabaseService:
             WHERE {config.id_field} = ?
         '''
         return self.execute_update(query, (node_id,), db_path)
+
+    def get_table_list(self, db_path: str) -> List[str]:
+        """获取数据库中的所有表名"""
+        try:
+            with self.get_connection(Path(db_path)) as conn:
+                cursor = conn.cursor()
+                # 查询所有表名（排除系统表）
+                cursor.execute("""
+                    SELECT name FROM sqlite_master
+                    WHERE type='table'
+                    AND name NOT LIKE 'sqlite_%'
+                    ORDER BY name
+                """)
+                tables = [row[0] for row in cursor.fetchall()]
+                return tables
+        except Exception as e:
+            raise Exception(f"获取表列表失败: {str(e)}")
 
 
 # 全局数据库服务实例

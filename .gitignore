@@ -5,6 +5,7 @@
 data/databases/*.db
 data/databases/*.sqlite
 data/databases/*.sqlite3
+data
 
 # 临时文件
 *.tmp
@@ -18,6 +19,7 @@ Thumbs.db
 backups/
 *.backup
 *.bak
+.history
 
 # Node.js
 node_modules/

@@ -1,29 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)",
-      "Bash(tree:*)",
-      "Bash(python:*)",
-      "Bash(start.bat)",
-      "Bash(find:*)",
-      "Bash(dir:*)",
-      "Bash(nul)",
-      "Bash(touch:*)",
-      "Bash(taskkill:*)",
-      "Bash(netstat:*)",
-      "Bash(findstr:*)",
-      "Bash(tskill:*)",
-      "Bash(cmp:*)",
-      "Bash(set:*)",
-      "Bash(timeout:*)",
-      "Bash(curl:*)",
-      "Bash(cmd:*)",
-      "Bash(del:*)",
-      "Bash(tasklist:*)",
-      "Bash(wmic:*)",
-      "Bash(powershell:*)",
-      "Bash(lsof:*)",
-      "Bash(handle:*)"
+      "Bash(Group-Object)",
+      "Bash(Where-Object { $_ount -gt 1 })",
+      "Bash(Select-Object Name, Count)",
+      "Bash(git checkout:*)",
+      "Bash(backups/README.md)"
     ],
     "deny": [],
     "ask": []

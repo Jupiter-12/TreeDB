@@ -8,11 +8,11 @@
 import { ApiClient } from './api/api.js';
 import { StateManager, createEmptyState } from './utils/state.js';
 import { SessionManager, withSession } from './utils/session.js';
-import { ConfigManager, ConfigFormController } from './config/config.js';
+import { ConfigManager } from './config/config.js';
+import { ConfigFormController } from './config/config-form-controller.js';
 import { TreeRenderer, DetailsRenderer, SearchController } from './ui/ui.js';
 import { getDescendantIds } from './utils/tree.js';
 import {
-  showToast,
   initializeTheme,
   setupLayoutResize,
   toggleControlPanel,
@@ -22,6 +22,7 @@ import {
   switchTab,
   eventBus
 } from './utils/utils.js';
+import { showToast } from './ui/toast.js';
 import {
   LAYOUT_MIN_WIDTH,
   LAYOUT_MAX_WIDTH,
@@ -111,16 +112,19 @@ class TreeDBApp {
    * @private
    */
   initializeUI() {
-    this.treeRenderer = new TreeRenderer(this.state, this.api);
-    this.detailsRenderer = new DetailsRenderer(this.state, this.api);
-    this.searchController = new SearchController(this.state);
-    this.configFormController = new ConfigFormController(this.configManager, this.sessionManager);
+    this.treeRenderer = new TreeRenderer(this.stateManager, this.api);
+    this.detailsRenderer = new DetailsRenderer(this.stateManager, this.api);
+    this.searchController = new SearchController(this.stateManager);
+    this.configFormController = new ConfigFormController(this.api);
 
     // 设置布局调整
     setupLayoutResize(this.state);
 
     // 设置标签切换
     setupTabSwitching();
+
+    // 设置控制面板切换
+    this.setupControlPanelToggle();
 
     // 更新布局宽度
     if (this.state.layoutWidth !== 1024) {
@@ -153,6 +157,10 @@ class TreeDBApp {
     });
     window.addEventListener('dataUpdated', this.handleDataUpdated);
     window.addEventListener('configSaved', this.handleConfigSaved);
+    window.addEventListener('configChanged', (e) => {
+      console.log('configChanged event received via inline listener');
+      this.handleConfigChanged(e);
+    });
 
     // 状态管理器订阅
     this.stateManager.subscribe((newState, prevState) => {
@@ -204,11 +212,17 @@ class TreeDBApp {
   setupMenuDropdowns() {
     const dropdowns = document.querySelectorAll('.menu-dropdown');
 
-    dropdowns.forEach(dropdown => {
+    dropdowns.forEach((dropdown) => {
       const button = dropdown.querySelector('button');
       const content = dropdown.querySelector('.menu-dropdown-content');
 
-      if (!button || !content) return;
+      if (!button || !content) {
+        console.warn('Dropdown missing button or content:', dropdown);
+        return;
+      }
+
+      // 确保初始状态是隐藏的
+      content.style.display = 'none';
 
       // 切换下拉菜单
       button.addEventListener('click', (e) => {
@@ -218,11 +232,26 @@ class TreeDBApp {
         dropdowns.forEach(other => {
           if (other !== dropdown) {
             other.classList.remove('show');
+            const otherContent = other.querySelector('.menu-dropdown-content');
+            if (otherContent) {
+              otherContent.style.display = 'none';
+            }
           }
         });
 
-        // 切换当前下拉菜单
-        dropdown.classList.toggle('show');
+        // 直接控制样式
+        const content = dropdown.querySelector('.menu-dropdown-content');
+        const isShowing = content.style.display === 'block';
+
+        if (isShowing) {
+          // 隐藏菜单
+          content.style.display = 'none';
+          dropdown.classList.remove('show');
+        } else {
+          // 显示菜单
+          content.style.display = 'block';
+          dropdown.classList.add('show');
+        }
       });
 
       // 点击菜单项时关闭下拉菜单
@@ -239,6 +268,10 @@ class TreeDBApp {
       if (!e.target.closest('.menu-dropdown')) {
         dropdowns.forEach(dropdown => {
           dropdown.classList.remove('show');
+          const content = dropdown.querySelector('.menu-dropdown-content');
+          if (content) {
+            content.style.display = 'none';
+          }
         });
       }
     });
@@ -271,6 +304,71 @@ class TreeDBApp {
   }
 
   /**
+   * 处理配置变更
+   * @private
+   */
+  handleConfigChanged() {
+    console.log('Config changed event received');
+    // 配置变更后重新加载数据
+    // 尝试从多个地方获取会话ID
+    let sessionId = this.sessionManager.getCurrentSessionId();
+    if (!sessionId) {
+      // 如果sessionManager中没有，直接从localStorage读取
+      sessionId = localStorage.getItem('treedb.activeSessionId');
+      console.log('Session ID from localStorage:', sessionId);
+    }
+    console.log('Current session ID:', sessionId);
+    if (sessionId) {
+      this.loadData();
+    } else {
+      console.warn('No active session to load data');
+    }
+  }
+
+  /**
+   * 设置控制面板切换
+   * @private
+   */
+  setupControlPanelToggle() {
+    const controlPanelMode = document.getElementById('controlPanelMode');
+    const configPanel = document.getElementById('configPanel');
+    const searchPanel = document.getElementById('searchPanel');
+
+    if (controlPanelMode && configPanel && searchPanel) {
+      controlPanelMode.addEventListener('change', (e) => {
+        const mode = e.target.value;
+
+        if (mode === 'config') {
+          configPanel.hidden = false;
+          searchPanel.hidden = true;
+        } else if (mode === 'search') {
+          configPanel.hidden = true;
+          searchPanel.hidden = false;
+          // 当切换到搜索面板时，重新初始化搜索控制器
+          if (this.searchController) {
+            setTimeout(() => {
+              this.searchController.init();
+            }, 0);
+          }
+        }
+      });
+
+      // 初始化显示配置面板
+      if (controlPanelMode.value === 'config') {
+        searchPanel.hidden = true;
+      } else {
+        configPanel.hidden = true;
+        // 如果初始是搜索模式，初始化搜索控制器
+        if (this.searchController) {
+          setTimeout(() => {
+            this.searchController.init();
+          }, 0);
+        }
+      }
+    }
+  }
+
+  /**
    * 处理配置保存
    * @private
    */
@@ -288,14 +386,14 @@ class TreeDBApp {
    */
   handleStateChange(newState, prevState) {
     // 处理关键状态变化
-    if (newState.selectedNodeId !== prevState.selectedNodeId) {
+    if (prevState && newState.selectedNodeId !== prevState.selectedNodeId) {
       eventBus.emit('nodeSelectionChanged', {
         oldId: prevState.selectedNodeId,
         newId: newState.selectedNodeId
       });
     }
 
-    if (newState.data !== prevState.data) {
+    if (prevState && newState.data !== prevState.data) {
       eventBus.emit('dataChanged', {
         oldData: prevState.data,
         newData: newState.data
@@ -330,15 +428,21 @@ class TreeDBApp {
    * @private
    */
   async loadData() {
+    console.log('loadData called');
     if (!this.sessionManager.getCurrentSessionId()) {
+      console.warn('No active session, skipping data load');
       return;
     }
 
     try {
+      console.log('Fetching nodes and meta...');
       const [nodes, meta] = await Promise.all([
         this.api.getNodes(),
         this.api.getMeta()
       ]);
+
+      console.log('Loaded nodes:', nodes);
+      console.log('Loaded meta:', meta);
 
       // 更新状态
       this.stateManager.batchUpdate((state) => {
@@ -353,10 +457,14 @@ class TreeDBApp {
 
       // 渲染树形结构
       if (this.treeRenderer) {
+        console.log('Rendering tree with', nodes.length, 'nodes');
         this.treeRenderer.render();
+      } else {
+        console.error('TreeRenderer not initialized');
       }
 
     } catch (error) {
+      console.error('Failed to load data:', error);
       showToast('加载数据失败: ' + error.message, 'error');
     }
   }

@@ -12,6 +12,9 @@ from pathlib import Path
 project_root = Path(__file__).parent
 os.chdir(project_root)
 
+# 设置项目根目录环境变量
+os.environ['PROJECT_ROOT'] = str(project_root.resolve())
+
 # 设置数据库路径环境变量
 db_path = project_root / 'data' / 'databases' / 'treedb.sqlite'
 os.environ['DB_PATH'] = str(db_path.resolve())
@@ -20,11 +23,11 @@ os.environ['DB_PATH'] = str(db_path.resolve())
 server_dir = project_root / 'server'
 sys.path.insert(0, str(server_dir))
 
-print(f"项目根目录: {project_root}")
-print(f"服务器目录: {server_dir}")
-print(f"数据库文件路径: {db_path.resolve()}")
-print(f"数据库文件存在: {db_path.exists()}")
-print(f"环境变量DB_PATH: {os.environ.get('DB_PATH')}")
+print(f"Project root: {project_root}")
+print(f"Server directory: {server_dir}")
+print(f"Database file path: {db_path.resolve()}")
+print(f"Database file exists: {db_path.exists()}")
+print(f"Environment variable DB_PATH: {os.environ.get('DB_PATH')}")
 
 # 导入并运行服务器
 if __name__ == '__main__':
@@ -45,12 +48,12 @@ if __name__ == '__main__':
                 except OSError:
                     continue
             else:
-                print("无法找到可用端口 3000-3010")
+                print("Cannot find available port 3000-3010")
                 sys.exit(1)
 
         # 设置端口环境变量
         os.environ['PORT'] = str(port)
-        print(f"使用端口: {port}")
+        print(f"Using port: {port}")
 
         # 导入并运行新的模块化应用
         # Change to server directory and run
@@ -59,10 +62,10 @@ if __name__ == '__main__':
         result = subprocess.run([sys.executable, 'app.py'], cwd='server')
         sys.exit(result.returncode)
     except KeyboardInterrupt:
-        print("\n服务器已停止")
+        print("\nServer stopped")
         sys.exit(0)
     except Exception as e:
-        print(f"启动服务器时出错: {e}")
+        print(f"Error starting server: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

@@ -4,23 +4,175 @@
  * 单一职责：处理用户界面相关功能
  */
 
-import { showToast, showModal, showConfirmation } from '../utils/utils.js';
+import { showModal, showConfirmation } from '../utils/utils.js';
+import { showToast, showSuccess, showError, showWarning, showInfo } from './toast.js';
+import { escapeHtml } from '../utils/core.js';
 
 /**
  * 树形渲染器
  * 遵循单一职���原则：只负责树形结构的渲染
  */
 export class TreeRenderer {
-  constructor(state, api) {
-    this.state = state;
+  constructor(stateManager, api) {
+    this.stateManager = stateManager;
     this.api = api;
+  }
+
+  /**
+   * 获取当前状态
+   * @private
+   */
+  get state() {
+    return this.stateManager.getState();
+  }
+
+  /**
+   * 构建树形结构（非递归）
+   * @private
+   */
+  buildForest(data) {
+    const nodes = new Map();
+    const roots = [];
+    const orphans = [];
+
+    // 第一遍：创建所有节点
+    data.forEach(row => {
+      const id = row.id;
+      nodes.set(id, { data: row, children: [] });
+    });
+
+    // 第二遍：构建父子关系
+    nodes.forEach(node => {
+      const nodeId = node.data.id;
+      const parentId = node.data.parent_id;
+
+      if (parentId === null || parentId === undefined || parentId === '' || parentId === nodeId) {
+        // 没有父节点或者是自己的父节点（循环引用）
+        roots.push(node);
+      } else {
+        const parent = nodes.get(parentId);
+        if (parent) {
+          parent.children.push(node);
+        } else {
+          // 父节点不存在，作为孤儿节点
+          orphans.push(node);
+        }
+      }
+    });
+
+    return { roots, orphans };
+  }
+
+  /**
+   * 渲染单个节点
+   * @private
+   */
+  renderTreeNode(node, depth = 0) {
+    const nodeId = node.data.id;
+    const isSelected = this.state.selectedNodeId === nodeId;
+    const isCollapsed = this.state.collapsed[nodeId];
+    const hasChildren = node.children.length > 0;
+    const indent = depth * 20;
+
+    const li = document.createElement('li');
+    li.className = 'tree-node';
+    li.dataset.id = nodeId;
+    li.dataset.depth = depth;
+
+    const label = document.createElement('div');
+    label.className = `tree-node-content ${isSelected ? 'selected' : ''}`;
+    // 不再使用缩进，子节点直接在父节点下方显示
+    label.dataset.nodeId = nodeId;
+
+    // 折叠/展开按钮 - 根节点不缩进，子节点适度缩进
+    if (hasChildren) {
+      const toggle = document.createElement('button');
+      toggle.className = `tree-toggle ${isCollapsed ? 'collapsed' : ''}`;
+      toggle.textContent = isCollapsed ? '+' : '-';
+      toggle.title = '展开 / 折叠';
+      // 根节点（depth=0）不缩进，子节点缩进10px
+      toggle.style.marginLeft = depth > 0 ? `${10 + (depth - 1) * 15}px` : '0';
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleCollapse(nodeId);
+      });
+      label.appendChild(toggle);
+    } else {
+      const spacer = document.createElement('span');
+      spacer.className = 'tree-spacer';
+      // 根节点（depth=0）不缩进，子节点缩进10px
+      spacer.style.marginLeft = depth > 0 ? `${10 + (depth - 1) * 15}px` : '0';
+      label.appendChild(spacer);
+    }
+
+    // 节点文本
+    const text = document.createElement('span');
+    text.className = 'tree-node-text';
+    // 尝试多个可能的名称字段
+    const nameValue = node.data[this.state.config.nameField?.value] ||
+                      node.data['name'] ||
+                      node.data['Name'] ||
+                      node.data['title'] ||
+                      node.data['Title'] ||
+                      `ID: ${node.data.id || node.data[this.state.config?.idField || 'id']}`;
+    text.textContent = nameValue;
+    label.appendChild(text);
+
+    li.appendChild(label);
+
+    // 子节点
+    if (hasChildren && !isCollapsed) {
+      const childrenContainer = document.createElement('div');
+      childrenContainer.className = 'tree-children';
+
+      node.children.forEach(child => {
+        const childElement = this.renderTreeNode(child, depth + 1);
+        childrenContainer.appendChild(childElement);
+      });
+
+      li.appendChild(childrenContainer);
+    }
+
+    return li;
+  }
+
+  /**
+   * 切换节点的折叠/展开状态
+   * @private
+   */
+  toggleCollapse(nodeId) {
+    const currentCollapsed = this.state.collapsed || {};
+    const newCollapsed = { ...currentCollapsed };
+
+    if (newCollapsed[nodeId]) {
+      delete newCollapsed[nodeId];
+    } else {
+      newCollapsed[nodeId] = true;
+    }
+
+    this.stateManager.setState('collapsed', newCollapsed);
+    this.render(); // 重新渲染
+  }
+
+  /**
+   * 选择节点
+   * @param {number} nodeId - 节点ID
+   */
+  selectNode(nodeId) {
+    this.stateManager.setState('selectedNodeId', nodeId);
+    this.render();
+
+    // 触发选择事件
+    window.dispatchEvent(new CustomEvent('nodeSelected', {
+      detail: { nodeId }
+    }));
   }
 
   /**
    * 渲染树形结构
    */
   render() {
-    const treeContainer = document.getElementById('tree');
+    const treeContainer = document.getElementById('treeContainer');
     if (!treeContainer) return;
 
     if (!this.state.data || this.state.data.length === 0) {
@@ -28,41 +180,43 @@ export class TreeRenderer {
       return;
     }
 
-    const rootNodes = this.state.data.filter(node => !node.parent_id);
-    const treeHtml = rootNodes.map(node => this.renderNode(node, 0)).join('');
-    treeContainer.innerHTML = treeHtml;
+    // 构建森林
+    const { roots, orphans } = this.buildForest(this.state.data);
+
+    // 清空容器
+    treeContainer.innerHTML = '';
+
+    // 渲染主树
+    const treeRoot = document.createElement('ul');
+    treeRoot.className = 'tree-root';
+
+    roots.forEach(node => {
+      const rendered = this.renderTreeNode(node);
+      treeRoot.appendChild(rendered);
+    });
+    treeContainer.appendChild(treeRoot);
+
+    // 渲染孤儿节点（如果有的话）
+    if (orphans.length > 0) {
+      const orphanSection = document.createElement('div');
+      orphanSection.className = 'tree-orphans';
+      orphanSection.innerHTML = `
+        <h3>未找到上级的节点</h3>
+        <p style="color: var(--color-text-muted); font-size: 12px; margin-bottom: 10px;">
+          以下节点的父节点不存在，可能是数据不一致导致的：
+        </p>
+      `;
+
+      const orphanList = document.createElement('ul');
+      orphans.forEach(node => {
+        const rendered = this.renderTreeNode(node);
+        orphanList.appendChild(rendered);
+      });
+      orphanSection.appendChild(orphanList);
+      treeContainer.appendChild(orphanSection);
+    }
 
     this.bindEvents();
-  }
-
-  /**
-   * 渲染单个节点
-   * @private
-   */
-  renderNode(node, depth) {
-    const hasChildren = this.state.data.some(n => n.parent_id === node.id);
-    const isCollapsed = this.state.collapsed[node.id];
-    const isSelected = this.state.selectedNodeId === node.id;
-    const indent = depth * 20;
-
-    return `
-      <div class="tree-node" data-id="${node.id}" data-depth="${depth}">
-        <div class="tree-node-content ${isSelected ? 'selected' : ''}" style="padding-left: ${indent}px">
-          ${hasChildren ? `
-            <button class="tree-toggle ${isCollapsed ? 'collapsed' : ''}" data-id="${node.id}">
-              ${isCollapsed ? '▶' : '▼'}
-            </button>
-          ` : '<span class="tree-spacer"></span>'}
-          <span class="tree-node-text">${node[this.state.config.nameField?.value || 'name'] || '未命名'}</span>
-        </div>
-        ${hasChildren && !isCollapsed ? `
-          <div class="tree-children">
-            ${this.state.data.filter(n => n.parent_id === node.id)
-              .map(child => this.renderNode(child, depth + 1)).join('')}
-          </div>
-        ` : ''}
-      </div>
-    `;
   }
 
   /**
@@ -115,9 +269,17 @@ export class TreeRenderer {
  * 详情渲染器
  */
 export class DetailsRenderer {
-  constructor(state, api) {
-    this.state = state;
+  constructor(stateManager, api) {
+    this.stateManager = stateManager;
     this.api = api;
+  }
+
+  /**
+   * 获取当前状态
+   * @private
+   */
+  get state() {
+    return this.stateManager.getState();
   }
 
   /**
@@ -183,10 +345,10 @@ export class DetailsRenderer {
 
     const TEXTAREA_TYPES = ['text', 'longtext', 'mediumtext'];
     if (TEXTAREA_TYPES.includes(field.type.toLowerCase())) {
-      return `<pre class="text-value">${this.escapeHtml(value)}</pre>`;
+      return `<pre class="text-value">${escapeHtml(value)}</pre>`;
     }
 
-    return `<span class="value">${this.escapeHtml(value)}</span>`;
+    return `<span class="value">${escapeHtml(value)}</span>`;
   }
 
   /**
@@ -207,7 +369,7 @@ export class DetailsRenderer {
     if (TEXTAREA_TYPES.includes(field.type.toLowerCase())) {
       return `
         <textarea id="${fieldId}" rows="4"
-                  onchange="detailsRenderer.updateEditValue('${field.name}', this.value)">${this.escapeHtml(value || '')}</textarea>
+                  onchange="detailsRenderer.updateEditValue('${field.name}', this.value)">${escapeHtml(value || '')}</textarea>
       `;
     }
 
@@ -226,26 +388,17 @@ export class DetailsRenderer {
 
     return `
       <input type="${field.type === 'password' ? 'password' : 'text'}"
-             id="${fieldId}" value="${this.escapeHtml(value || '')}"
+             id="${fieldId}" value="${escapeHtml(value || '')}"
              onchange="detailsRenderer.updateEditValue('${field.name}', this.value)">
     `;
   }
 
-  /**
-   * HTML转义
-   * @private
-   */
-  escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
+  
   /**
    * 开始编辑
    */
   startEdit() {
-    this.state.isEditMode = true;
+    this.stateManager.setState('isEditMode', true);
     this.render();
   }
 
@@ -253,10 +406,12 @@ export class DetailsRenderer {
    * 取消编辑
    */
   cancelEdit() {
-    this.state.isEditMode = false;
-    this.state.editingField = null;
-    this.state.editValue = null;
-    this.state.originalValue = null;
+    this.stateManager.batchUpdate((state) => {
+      state.isEditMode = false;
+      state.editingField = null;
+      state.editValue = null;
+      state.originalValue = null;
+    });
     this.render();
   }
 
@@ -266,8 +421,10 @@ export class DetailsRenderer {
    * @param {*} value - 值
    */
   updateEditValue(fieldName, value) {
-    this.state.editValue = value;
-    this.state.editingField = fieldName;
+    this.stateManager.batchUpdate((state) => {
+      state.editValue = value;
+      state.editingField = fieldName;
+    });
   }
 
   /**
@@ -282,14 +439,20 @@ export class DetailsRenderer {
       await this.api.updateNode(this.state.selectedNodeId, updateData);
 
       // 更新本地数据
-      const node = this.state.data.find(n => n.id === this.state.selectedNodeId);
-      if (node) {
-        node[this.state.editingField] = this.state.editValue;
-      }
+      const newData = this.state.data.map(n => {
+        if (n.id === this.state.selectedNodeId) {
+          return { ...n, [this.state.editingField]: this.state.editValue };
+        }
+        return n;
+      });
+
+      this.stateManager.setState('data', newData);
 
       showToast('保存成功', 'success');
-      this.state.isEditMode = false;
-      this.state.editingField = null;
+      this.stateManager.batchUpdate((state) => {
+        state.isEditMode = false;
+        state.editingField = null;
+      });
       this.render();
 
       // 触发树形更新
@@ -313,10 +476,14 @@ export class DetailsRenderer {
       await this.api.deleteNode(this.state.selectedNodeId);
 
       // 从本地数据中移除
-      this.state.data = this.state.data.filter(n =>
+      const newData = this.state.data.filter(n =>
         n.id !== this.state.selectedNodeId && !descendants.includes(n.id)
       );
-      this.state.selectedNodeId = null;
+
+      this.stateManager.batchUpdate((state) => {
+        state.data = newData;
+        state.selectedNodeId = null;
+      });
 
       showToast('删除成功', 'success');
 
@@ -333,54 +500,74 @@ export class DetailsRenderer {
  * 搜索控制器
  */
 export class SearchController {
-  constructor(state) {
-    this.state = state;
+  constructor(stateManager) {
+    this.stateManager = stateManager;
     this.init();
+  }
+
+  /**
+   * 获取当前状态
+   * @private
+   */
+  get state() {
+    return this.stateManager.getState();
   }
 
   /**
    * 初始化搜索
    */
   init() {
-    const searchInput = document.getElementById('search-input');
-    const searchField = document.getElementById('search-field');
-    const clearSearch = document.getElementById('clear-search');
+    // 清除之前的事件监听器
+    const searchInput = document.getElementById('treeSearch');
+    const clearSearch = document.getElementById('clearTreeSearch');
+    const searchResults = document.getElementById('searchResults');
+
+    // 使用简单的防抖实现
+    let searchTimeout;
+    const debouncedSearch = () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        this.handleSearch();
+      }, 300);
+    };
 
     if (searchInput) {
-      import('./core.js').then(({ debounce }) => {
-        searchInput.addEventListener('input', debounce(() => this.handleSearch(), 300));
-      });
-    }
-
-    if (searchField) {
-      searchField.addEventListener('change', () => this.handleSearch());
+      // 移除旧的监听器
+      searchInput.removeEventListener('input', debouncedSearch);
+      // 添加新的监听器
+      searchInput.addEventListener('input', debouncedSearch);
     }
 
     if (clearSearch) {
+      clearSearch.removeEventListener('click', this.clearResults.bind(this));
       clearSearch.addEventListener('click', () => this.clearResults());
     }
 
     // 导航按钮
-    const prevButton = document.getElementById('search-prev');
-    const nextButton = document.getElementById('search-next');
-    if (prevButton) prevButton.addEventListener('click', () => this.navigate('prev'));
-    if (nextButton) nextButton.addEventListener('click', () => this.navigate('next'));
+    const prevButton = document.getElementById('treeSearchPrev');
+    const nextButton = document.getElementById('treeSearchNext');
+    if (prevButton) {
+      prevButton.removeEventListener('click', () => this.navigate('prev'));
+      prevButton.addEventListener('click', () => this.navigate('prev'));
+    }
+    if (nextButton) {
+      nextButton.removeEventListener('click', () => this.navigate('next'));
+      nextButton.addEventListener('click', () => this.navigate('next'));
+    }
   }
 
   /**
    * 处理搜索
    */
   handleSearch() {
-    const searchInput = document.getElementById('search-input');
-    const searchField = document.getElementById('search-field');
+    const searchInput = document.getElementById('treeSearch');
 
-    if (!searchInput || !searchField) return;
+    if (!searchInput) return;
 
     const query = searchInput.value.trim();
-    const field = searchField.value;
 
-    this.state.searchQuery = query;
-    this.state.searchField = field;
+    this.stateManager.setState('searchQuery', query);
+    this.stateManager.setState('searchField', 'Name'); // 默认搜索Name字段
 
     if (!query) {
       this.clearResults();
@@ -396,14 +583,48 @@ export class SearchController {
   perform() {
     if (!this.state.searchQuery) return;
 
-    const results = this.state.data.filter(node => {
-      const value = String(node[this.state.searchField] || '').toLowerCase();
-      return value.includes(this.state.searchQuery.toLowerCase());
-    });
+    // 确保有数据可搜索
+    if (!this.state.data || this.state.data.length === 0) {
+      showToast('没有可搜索的数据', 'warning');
+      return;
+    }
 
-    this.state.searchResults = results;
-    this.state.searchIndex = 0;
-    this.state.searchTotal = results.length;
+    const query = this.state.searchQuery.toLowerCase();
+    const searchFields = ['Name', 'name', 'Introduce', 'introduce', 'Website', 'website', 'Tutorial', 'tutorial'];
+
+    const results = this.state.data.filter(node => {
+      // 搜索多个字段
+      return searchFields.some(field => {
+        const value = String(node[field] || '').toLowerCase();
+        return value.includes(query);
+      });
+    }).map(node => {
+      // 计算匹配得分，用于排序
+      let score = 0;
+      let matchedField = '';
+
+      searchFields.forEach(field => {
+        const value = String(node[field] || '').toLowerCase();
+        if (value === query) {
+          score = 100; // 完全匹配
+          matchedField = field;
+        } else if (value.startsWith(query)) {
+          score = 80; // 开头匹配
+          matchedField = field;
+        } else if (value.includes(query)) {
+          score = 60; // 包含匹配
+          if (!matchedField) matchedField = field;
+        }
+      });
+
+      return { ...node, _searchScore: score, _matchedField: matchedField };
+    }).sort((a, b) => b._searchScore - a._searchScore);
+
+    this.stateManager.batchUpdate((state) => {
+      state.searchResults = results;
+      state.searchIndex = 0;
+      state.searchTotal = results.length;
+    });
 
     this.renderResults();
 
@@ -420,9 +641,11 @@ export class SearchController {
    * 渲染搜索结果
    */
   renderResults() {
-    const searchInfo = document.getElementById('search-info');
-    const prevButton = document.getElementById('search-prev');
-    const nextButton = document.getElementById('search-next');
+    const searchInfo = document.getElementById('treeSearchInfo');
+    const prevButton = document.getElementById('treeSearchPrev');
+    const nextButton = document.getElementById('treeSearchNext');
+    const clearButton = document.getElementById('clearTreeSearch');
+    const searchInput = document.getElementById('treeSearch');
 
     if (searchInfo) {
       if (this.state.searchTotal > 0) {
@@ -434,8 +657,50 @@ export class SearchController {
 
     if (prevButton) prevButton.disabled = this.state.searchIndex <= 0;
     if (nextButton) nextButton.disabled = this.state.searchIndex >= this.state.searchTotal - 1;
+    if (clearButton) clearButton.disabled = this.state.searchResults.length === 0;
+
+    // 渲染搜索结果列表
+    this.renderSearchList();
   }
 
+  /**
+   * 渲染搜索结果列表
+   */
+  renderSearchList() {
+    const searchResultsContainer = document.getElementById('searchResults');
+    if (!searchResultsContainer) return;
+
+    if (this.state.searchResults.length === 0) {
+      searchResultsContainer.innerHTML = '';
+      return;
+    }
+
+    const resultsHtml = this.state.searchResults.map((node, index) => {
+      const isSelected = index === this.state.searchIndex;
+      const name = node.Name || node.name || node.title || `ID: ${node.id}`;
+      return `
+        <div class="search-result-item ${isSelected ? 'selected' : ''}" data-index="${index}">
+          <span class="result-name">${escapeHtml(name)}</span>
+          <span class="result-id">ID: ${node.id}</span>
+        </div>
+      `;
+    }).join('');
+
+    searchResultsContainer.innerHTML = resultsHtml;
+
+    // 添加点击事件
+    searchResultsContainer.querySelectorAll('.search-result-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const index = parseInt(item.dataset.index);
+        this.stateManager.setState('searchIndex', index);
+        this.renderResults();
+        const nodeId = this.state.searchResults[index].id;
+        window.dispatchEvent(new CustomEvent('selectNode', { detail: { nodeId } }));
+      });
+    });
+  }
+
+  
   /**
    * 导航搜索结果
    * @param {string} direction - 方向：prev 或 next
@@ -443,13 +708,16 @@ export class SearchController {
   navigate(direction) {
     if (this.state.searchResults.length === 0) return;
 
-    if (direction === 'prev' && this.state.searchIndex > 0) {
-      this.state.searchIndex--;
-    } else if (direction === 'next' && this.state.searchIndex < this.state.searchResults.length - 1) {
-      this.state.searchIndex++;
+    let newIndex = this.state.searchIndex;
+    if (direction === 'prev' && newIndex > 0) {
+      newIndex--;
+    } else if (direction === 'next' && newIndex < this.state.searchResults.length - 1) {
+      newIndex++;
     }
 
-    const nodeId = this.state.searchResults[this.state.searchIndex].id;
+    this.stateManager.setState('searchIndex', newIndex);
+
+    const nodeId = this.state.searchResults[newIndex].id;
     window.dispatchEvent(new CustomEvent('selectNode', { detail: { nodeId } }));
     this.renderResults();
   }
@@ -458,14 +726,21 @@ export class SearchController {
    * 清除搜索结果
    */
   clearResults() {
-    this.state.searchQuery = '';
-    this.state.searchResults = [];
-    this.state.searchIndex = 0;
-    this.state.searchTotal = 0;
+    this.stateManager.batchUpdate((state) => {
+      state.searchQuery = '';
+      state.searchResults = [];
+      state.searchIndex = 0;
+      state.searchTotal = 0;
+    });
 
-    const searchInput = document.getElementById('search-input');
+    const searchInput = document.getElementById('treeSearch');
     if (searchInput) searchInput.value = '';
 
+    // 清除搜索结果显示
+    const searchResultsContainer = document.getElementById('searchResults');
+    if (searchResultsContainer) searchResultsContainer.innerHTML = '';
+
+    // 更新搜索信息显示
     this.renderResults();
   }
 }

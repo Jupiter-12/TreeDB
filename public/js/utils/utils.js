@@ -12,36 +12,6 @@ import {
   LAYOUT_STORAGE_KEY
 } from './core.js';
 
-// ==================== Toast Notifications ====================
-
-/**
- * 显示提示消息
- * @param {string} message - 消息内容
- * @param {string} type - 类型：info, success, warning, error
- * @param {number} duration - 持续时间（毫秒）
- */
-export function showToast(message, type = 'info', duration = 3000) {
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-
-  // 初始状态
-  toast.style.opacity = '0';
-  toast.style.transform = 'translateY(20px)';
-
-  requestAnimationFrame(() => {
-    toast.style.transition = 'opacity 0.3s, transform 0.3s';
-    toast.style.opacity = '1';
-    toast.style.transform = 'translateY(0)';
-  });
-
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateY(20px)';
-    setTimeout(() => toast.remove(), 300);
-  }, duration);
-}
 
 // ==================== Modal Dialogs ====================
 
