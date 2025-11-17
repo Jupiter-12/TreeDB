@@ -33,16 +33,6 @@ export class ConfigFormController {
     this.availableTables = [];
     this.selectedTable = null;
 
-    // 调试输出
-    console.log('ConfigFormController initialized:', {
-      form: !!this.form,
-      elements: {
-        browseBtn: !!this.elements.browseBtn,
-        fetchTablesBtn: !!this.elements.fetchTablesBtn,
-        refreshBtn: !!this.elements.refreshBtn
-      }
-    });
-
     // 初始化事件监听
     this.initializeEventListeners();
   }
@@ -58,16 +48,10 @@ export class ConfigFormController {
 
     // 浏览数据库文件
     if (this.elements.browseBtn) {
-      console.log('Setting up browse button listener...');
-      this.elements.browseBtn.addEventListener('click', () => {
-        console.log('Browse button clicked!');
+      this.elements.browseBtn.addEventListener('click', (e) => {
+        e.preventDefault();
         this.browseDatabase();
       });
-      this.elements.browseBtn.addEventListener('mousedown', () => {
-        console.log('Browse button mousedown!');
-      });
-    } else {
-      console.error('Browse button not found!');
     }
 
     // 获取表列表
@@ -174,16 +158,17 @@ export class ConfigFormController {
    */
   async browseDatabase() {
     try {
-      // 创建文件输入元素
+      // 创建文件输入元��
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.db,.sqlite,.sqlite3';
 
+      // 当选择文件后
       input.onchange = (e) => {
         const file = e.target.files[0];
         if (file) {
-          // For security, browsers only provide filename, not full path
-          // We'll use the filename and let the server find it in data/databases
+          // 浏览器安全限制，只能获取文件名，不能获取完整路径
+          // 我们使用文件名，让服务器在 data/databases 目录中查找
           const fileName = file.name;
           this.elements.dbPath.value = fileName;
 
@@ -195,7 +180,7 @@ export class ConfigFormController {
         }
       };
 
-      // 触发文件选择
+      // 触发文件选择对话框
       input.click();
 
     } catch (error) {
@@ -208,7 +193,6 @@ export class ConfigFormController {
    * 获取数据库表列表
    */
   async fetchTables() {
-    console.log('Fetch tables button clicked!');
 
     const dbPath = this.elements.dbPath?.value?.trim();
 

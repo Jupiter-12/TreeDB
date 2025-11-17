@@ -5,7 +5,7 @@
  */
 
 import { ApplicationBootstrap } from './core/application-bootstrap.js';
-import { showToast } from './utils/utils.js';
+import { showToast } from './ui/toast.js';
 
 /**
  * 主应用程序初始化

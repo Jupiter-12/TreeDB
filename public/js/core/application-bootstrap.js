@@ -12,7 +12,7 @@ import { ComponentFactory } from './component-factory.js';
 import { EventCoordinator } from './event-coordinator.js';
 import { ThemeManager } from '../utils/theme.js';
 import { StorageManager } from '../utils/storage.js';
-import { showToast } from '../utils/utils.js';
+import { showToast } from '../ui/toast.js';
 
 /**
  * 应用程序启动引导类

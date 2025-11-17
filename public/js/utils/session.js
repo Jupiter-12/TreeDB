@@ -4,7 +4,7 @@
  * 单一职责：处理用户会话相关功能
  */
 
-import { showToast } from './utils.js';
+import { showToast } from '../ui/toast.js';
 
 /**
  * 会话管理器
