@@ -23,7 +23,7 @@ class ConfigManager:
         self.BROWSER_ROOT = Path(os.environ.get('TREE_DB_BROWSER_ROOT', self.BASE_DIR)).resolve()
 
         # 数据库配置
-        self.DEFAULT_DB_PATH = self.BASE_DIR / 'data' / 'databases' / 'treedb.sqlite'
+        self.DEFAULT_DB_PATH = (self.BASE_DIR / 'data' / 'databases' / 'treedb.sqlite').resolve()
         self.ALLOWED_DB_EXTENSIONS = {'.db', '.sqlite', '.sqlite3', '.sqlite2'}
 
         # 默认配置
@@ -92,7 +92,9 @@ class ConfigManager:
 
     def _refresh_runtime_variables(self) -> None:
         """刷新运行时变量"""
-        self.DB_PATH = Path(self._config['DB_PATH'])
+        normalized_db_path = self.normalize_db_path(self._config.get('DB_PATH'))
+        self._config['DB_PATH'] = normalized_db_path
+        self.DB_PATH = Path(normalized_db_path)
         self.TABLE_NAME = self._config['TABLE_NAME']
         self.ID_FIELD = self._config['ID_FIELD']
         self.PARENT_FIELD = self._config['PARENT_FIELD']
@@ -104,6 +106,18 @@ class ConfigManager:
             old_config = self.get_config_snapshot()
             self.apply_config_updates(new_config)
             return old_config
+
+    def normalize_db_path(self, value: Optional[Any]) -> str:
+        """标准化数据库路径，确保相对路径基于项目根目录"""
+        if not value:
+            path = self.DEFAULT_DB_PATH
+        else:
+            path = Path(str(value))
+            if not path.is_absolute():
+                path = (self.BASE_DIR / path).resolve()
+            else:
+                path = path.resolve()
+        return str(path)
 
     def make_resource_key(self, config: Optional[Dict[str, Any]] = None) -> tuple:
         """创建资源键"""

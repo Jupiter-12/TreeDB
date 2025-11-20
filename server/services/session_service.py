@@ -179,7 +179,9 @@ class SessionService:
         """规范化配置载荷"""
         normalized = {}
         for key, value in payload.items():
-            if key in ['DB_PATH', 'TABLE_NAME', 'ID_FIELD', 'PARENT_FIELD']:
+            if key == 'DB_PATH':
+                normalized[key] = config.normalize_db_path(value)
+            elif key in ['TABLE_NAME', 'ID_FIELD', 'PARENT_FIELD']:
                 normalized[key] = str(value) if value is not None else ''
             elif key == 'AUTO_BOOTSTRAP':
                 normalized[key] = config.parse_bool(value)
