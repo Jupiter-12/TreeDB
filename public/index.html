@@ -204,7 +204,7 @@
   <!-- JavaScript Files -->
   <script type="module" src="js/main.js"></script>
   <script>
-    // 菜单下拉功能初始化
+    // 菜单下拉功能初始化：保证互斥展开与外部点击收起
     document.addEventListener('DOMContentLoaded', () => {
       const dropdowns = document.querySelectorAll('.menu-dropdown');
 
@@ -214,22 +214,22 @@
 
         if (!button || !content) return;
 
-        // 点击按钮切换下拉菜单
+        // 点击按钮切换当前下拉（阻止冒泡，外层点击可收起）
         button.addEventListener('click', (e) => {
           e.stopPropagation();
 
-          // 关闭其他所有下拉菜单
+          // 先关闭其他下拉，确保同一时间只展开一个
           dropdowns.forEach(other => {
             if (other !== dropdown) {
               other.classList.remove('show');
             }
           });
 
-          // 切换当前下拉菜单
+          // 再切换当前下拉菜单
           dropdown.classList.toggle('show');
         });
 
-        // 点击菜单项时关闭下拉菜单
+        // 点击菜单项后收起下拉，避免悬挂状态
         const menuItems = content.querySelectorAll('.menu-item');
         menuItems.forEach(item => {
           item.addEventListener('click', () => {
@@ -238,7 +238,7 @@
         });
       });
 
-      // 点击页面其他地方时关闭所有下拉菜单
+      // 点击页面其他区域时关闭所有下拉，保持界面清爽
       document.addEventListener('click', (e) => {
         if (!e.target.closest('.menu-dropdown')) {
           dropdowns.forEach(dropdown => {

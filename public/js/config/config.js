@@ -23,7 +23,7 @@ export class ConfigManager {
    * @returns {Promise<Object|null>} - 配置对象
    */
   async loadInitialConfig() {
-    // 如果没有会话，直接返回null
+    // 无会话时跳过加载，避免无效请求和潜在冲突
     if (!this.sessionManager.getCurrentSessionId()) {
       return null;
     }

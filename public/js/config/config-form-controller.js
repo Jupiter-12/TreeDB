@@ -112,10 +112,10 @@ export class ConfigFormController {
     const formData = new FormData(this.form);
     const dbPath = formData.get('db_path');
 
-    // 构建完整的数据库路径
+    // 构建完整的数据库路径，统一放在 data/databases 目录
     let fullDbPath = dbPath;
     if (dbPath) {
-      // 如果是相对路径（不包含驱动器字母），构建相对路径
+      // 如果是相对路径（不包含驱动器字母），限制在项目数据目录内构建
       if (!dbPath.includes(':') && !dbPath.startsWith('/')) {
         fullDbPath = `data/databases/${dbPath}`;
       }
@@ -158,7 +158,7 @@ export class ConfigFormController {
    */
   async browseDatabase() {
     try {
-      // 创建文件输入元��
+      // 创建文件输入元素（file input），用于选择数据库文件
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.db,.sqlite,.sqlite3';
