@@ -1,0 +1,5153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>树形数据编辑器</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f7;
+      --fg: #222;
+      --accent: #276ef1;
+      --border: #d0d0d0;
+      --surface: #ffffff;
+      --surface-alt: #fafafa;
+      --surface-hover: #fdfdfd;
+      --muted: #666;
+      --muted-soft: #999;
+      --overlay: rgba(0, 0, 0, 0.45);
+      --toast-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+      --modal-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+      --input-bg: #ffffff;
+    }
+
+    :root.theme-light {
+      color-scheme: light;
+    }
+
+    :root.theme-dark {
+      color-scheme: dark;
+      --bg: #1e1f22;
+      --fg: #f3f4f8;
+      --accent: #6488ff;
+      --border: #3a3d44;
+      --surface: #2a2d34;
+      --surface-alt: #30333b;
+      --surface-hover: #343741;
+      --muted: #aeb5c2;
+      --muted-soft: #8d94a1;
+      --overlay: rgba(10, 10, 15, 0.6);
+      --toast-shadow: 0 16px 32px rgba(4, 5, 10, 0.55);
+      --modal-shadow: 0 22px 50px rgba(4, 5, 10, 0.5);
+      --input-bg: #1f2127;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not(.theme-light):not(.theme-dark) {
+        color-scheme: dark;
+        --bg: #1e1f22;
+        --fg: #f3f4f8;
+        --accent: #6488ff;
+        --border: #3a3d44;
+        --surface: #2a2d34;
+        --surface-alt: #30333b;
+        --surface-hover: #343741;
+        --muted: #aeb5c2;
+        --muted-soft: #8d94a1;
+        --overlay: rgba(10, 10, 15, 0.6);
+        --toast-shadow: 0 16px 32px rgba(4, 5, 10, 0.55);
+        --modal-shadow: 0 22px 50px rgba(4, 5, 10, 0.5);
+        --input-bg: #1f2127;
+      }
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+    }
+    
+    .theme-selector {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .theme-selector select {
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--input-bg);
+      color: var(--fg);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    #app {
+      flex: 1 1 auto;
+      display: grid;
+      --left-width: 320px;
+      --right-width: 320px;
+      --default-left-width: 320px;
+      --default-right-width: 320px;
+      grid-template-columns: var(--left-width) 3px 1fr 3px var(--right-width);
+      grid-template-rows: minmax(0, 1fr);
+      gap: 0;
+      padding: 16px;
+      box-sizing: border-box;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .panel-resizer {
+      cursor: ew-resize;
+      position: relative;
+      user-select: none;
+      width: 3px;
+      min-width: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 0;
+    }
+
+    .panel-resizer::after {
+      content: '';
+      position: absolute;
+      top: 12px;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1px;
+      background: var(--border);
+      border-radius: 1px;
+      transition: background 150ms ease;
+    }
+
+    .panel-resizer:hover::after {
+      background: var(--accent);
+    }
+
+    .panel-resizer.dragging::after {
+      background: var(--accent);
+    }
+    
+    .panel-resizer::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 1px;
+      height: 24px;
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 1px;
+      z-index: 1;
+    }
+    
+    [data-theme="dark"] .panel-resizer::before {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .menu-bar-container {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      flex-shrink: 0;
+      overflow: visible;  /* 确保不裁剪下拉菜单 */
+      position: relative;
+      z-index: 1000;
+    }
+    
+    .menu-bar {
+      display: flex;
+      gap: 8px;
+      padding: 0;
+      align-items: center;
+      position: relative;
+      justify-content: flex-start;  /* 确保从左对齐 */
+      flex-wrap: nowrap;  /* 防止换行 */
+      min-height: 32px;  /* 固定高度防止跳动 */
+      width: 100%;  /* 确保占满容器宽度 */
+    }
+
+    .menu-dropdown {
+      position: relative;
+      display: inline-block;
+      flex: 0 0 auto;  /* 简化flex属性，防止任何伸缩 */
+      vertical-align: top;  /* 确保垂直对齐 */
+    }
+    
+    #nodeMenu {
+      /* 针对节点操作菜单的特殊处理 */
+      min-width: 120px;  /* 确保有足够的宽度 */
+    }
+
+    .menu-dropdown > button {
+      min-width: 100px;  /* 最小宽度 */
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      background: transparent;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;  /* 使用inline-flex */
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+      color: var(--fg);
+      transition: all 120ms ease;
+      white-space: nowrap;  /* 防止文字换行 */
+    }
+
+    .menu-dropdown > button::after {
+      content: '▾';
+      font-size: 10px;
+      opacity: 0.6;
+      flex-shrink: 0;  /* 防止箭头被压缩 */
+    }
+
+    .menu-dropdown > button:hover,
+    .menu-dropdown.active > button {
+      background: var(--surface-alt);
+      border-color: var(--border);
+    }
+
+    .menu-dropdown-content {
+      display: none;
+      position: absolute;  /* 改回absolute定位，相对于父元素 */
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      width: 200px;  /* 固定宽度，防止内容变化时宽度改变 */
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      z-index: 99999;
+      overflow: visible;  /* 改为visible */
+    }
+    
+    [data-theme="dark"] .menu-dropdown-content {
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .menu-dropdown.active .menu-dropdown-content {
+      display: block !important;
+    }
+
+    .menu-dropdown-content button {
+      width: 100%;
+      margin: 0;  /* 明确设置margin为0 */
+      padding: 8px 12px;
+      text-align: left;
+      border: none;
+      background: transparent;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--fg);
+      transition: background 120ms ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      box-sizing: border-box;  /* 确保padding计算在内 */
+    }
+    
+    .menu-dropdown-content button.menu-item {
+      /* 确保所有菜单项完全一致 */
+      display: flex !important;
+      width: 100% !important;
+      margin: 0 !important;  /* 强制margin为0 */
+      padding: 8px 12px !important;
+    }
+    
+    .menu-dropdown-content button > span:first-child {
+      flex: 1;
+      text-align: left;
+      min-width: 80px;  /* 确保所有按钮文本区域宽度一致 */
+    }
+
+    .menu-dropdown-content button:hover:not(:disabled) {
+      background: var(--surface-hover);
+    }
+
+    .menu-dropdown-content button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .menu-dropdown-content .menu-separator {
+      height: 1px;
+      background: var(--border);
+      margin: 4px 0;
+    }
+
+    .menu-shortcut {
+      margin-left: auto;
+      opacity: 0.5;
+      font-size: 11px;
+      min-width: 50px;  /* 确保即使为空也占据空间 */
+      text-align: right;
+      display: inline-block;  /* 确保空内容也占据空间 */
+    }
+    
+    .menu-shortcut:empty::before {
+      content: '\00a0';  /* 空内容时插入一个不换行空格 */
+      visibility: hidden;  /* 隐藏但保持空间 */
+    }
+
+    #leftColumn {
+      min-height: 0;
+      min-width: 150px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #controlPanelSection {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #controlPanelSection .section-content {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+    }
+
+    .control-panel {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: auto;
+    }
+
+    .control-panel[hidden] {
+      display: none !important;
+    }
+
+    #configPanel .config-form,
+    #searchPanel .search-panel {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: auto;
+    }
+
+    #configPanel .config-form {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    #searchPanel .search-panel {
+      gap: 12px;
+    }
+
+    .control-panel-toggle {
+      flex: 0 0 auto;
+    }
+
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      overflow: hidden;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #detailsPaneSection {
+      min-width: 150px;
+    }
+    
+    .section-content {
+      flex: 1 1 auto;
+      overflow: auto;
+      min-height: 0;
+    }
+
+    .section-content.column {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    #detailsPaneSection .section-content {
+      align-items: flex-start;
+      overflow-x: auto;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+      padding-right: 8px;
+    }
+
+    #detailsPane {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 0 0 12px;
+    }
+
+    .details-field-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .details-field-primary-badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(39, 110, 241, 0.12);
+      border: 1px solid rgba(39, 110, 241, 0.3);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+    }
+
+    .details-foreign-select {
+      background: #e8ecf8;
+      border-color: var(--border);
+    }
+
+    .details-foreign-select:focus,
+    .details-foreign-select:focus-visible {
+      background: rgba(39, 110, 241, 0.2);
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    .details-chip {
+      background: rgba(39, 110, 241, 0.14);
+      border: 1px solid rgba(39, 110, 241, 0.35);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.6px;
+      box-shadow: 0 2px 6px rgba(39, 110, 241, 0.18);
+    }
+
+    .section-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 12px;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+    }
+
+    #detailsPane form {
+      width: 100%;
+      max-width: 640px;
+    }
+
+    #detailsPane .form-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #detailsPane .form-actions button + button {
+      margin-left: 0;
+    }
+
+    #treePane {
+      overflow: hidden;
+      min-width: 150px;
+    }
+
+    #treePane .section-content {
+      padding-right: 4px;
+    }
+
+    #treeContainer {
+      min-height: 0;
+    }
+
+    section h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    #treeContainer ul {
+      list-style: none;
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    #treeContainer li {
+      margin: 4px 0;
+      position: relative;
+    }
+
+    #treeContainer li::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      top: 12px;
+      width: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .node-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .node-label:hover {
+      background: rgba(39, 110, 241, 0.1);
+    }
+
+    .node-label.active {
+      background: rgba(39, 110, 241, 0.18);
+      border: 1px solid rgba(39, 110, 241, 0.38);
+    }
+
+    .node-label span.meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .node-label span.child-count {
+      font-size: 12px;
+      color: var(--muted-soft);
+    }
+
+    .node-context-menu {
+      position: absolute;
+      z-index: 2000;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: var(--modal-shadow);
+      padding: 4px;
+      min-width: 150px;
+    }
+
+    .node-context-menu button {
+      display: block;
+      width: 100%;
+      padding: 6px 10px;
+      border: none;
+      background: none;
+      color: var(--fg);
+      font-size: 13px;
+      text-align: left;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .node-context-menu button:hover,
+    .node-context-menu button:focus {
+      background: rgba(39, 110, 241, 0.12);
+      outline: none;
+    }
+
+    .node-context-menu button + button {
+      margin-left: 0;
+      margin-top: 2px;
+    }
+
+    button {
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--fg);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 120ms ease;
+      white-space: nowrap;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    button:disabled {
+      background: var(--surface-alt);
+      border-color: var(--border);
+      color: var(--muted);
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    button.danger {
+      border-color: #e55353;
+      background: #e55353;
+      color: #fff;
+    }
+
+    button + button {
+      margin-left: 8px;
+    }
+
+    .tree-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .search-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .search-toolbar .search-input-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .search-toolbar .search-input-row input[type="search"] {
+      flex: 1 1 auto;
+    }
+
+    .search-toolbar .search-nav-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .search-toolbar .tree-search-info {
+      min-width: 64px;
+      text-align: center;
+    }
+
+    .tree-toolbar input[type="search"] {
+      flex: 1 1 auto;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--input-bg);
+      color: var(--fg);
+      font-size: 13px;
+    }
+
+    .tree-toolbar input[type="search"]::placeholder {
+      color: var(--muted);
+    }
+
+    .tree-search-info {
+      min-width: 64px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .tree-empty-state {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 12px 0;
+    }
+
+    .node-label.search-match:not(.active) {
+      border: 1px solid rgba(39, 110, 241, 0.45);
+      background: rgba(39, 110, 241, 0.12);
+    }
+
+    .control-panel-toggle {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+    }
+
+    .control-panel-toggle select {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--input-bg);
+      color: var(--fg);
+      font-size: 13px;
+    }
+
+    .control-panel[hidden] {
+      display: none !important;
+    }
+
+    .search-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .search-results {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 320px;
+      overflow-y: auto;
+      border-top: 1px solid var(--border);
+      padding-top: 6px;
+    }
+
+    .search-results-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .search-result-item {
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: var(--surface-alt);
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+
+    .search-result-item.active {
+      border-color: rgba(39, 110, 241, 0.45);
+      box-shadow: 0 0 0 1px rgba(39, 110, 241, 0.18) inset;
+    }
+
+    .search-result-button {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      width: 100%;
+      padding: 8px 10px;
+      gap: 4px;
+      border: none;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .search-result-button:hover {
+      background: var(--surface-hover);
+    }
+
+    .search-result-button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .search-result-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .search-result-meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .search-empty-state {
+      margin: 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .config-form {
+      margin-top: 0;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: grid;
+      gap: 10px;
+      background: var(--surface-alt);
+    }
+
+    .config-form h3 {
+      margin: 0;
+      font-size: 14px;
+    }
+
+    .config-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .config-grid .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .config-grid .field-group.checkbox-group {
+      align-items: flex-start;
+    }
+
+    .input-with-button {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .input-with-button > input,
+    .input-with-button > select {
+      flex: 1 1 auto;
+    }
+
+    .input-with-button > button {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
+
+    .theme-selector {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      margin-top: 0;
+    }
+
+    header .theme-selector {
+      margin-left: auto;
+    }
+
+    .theme-selector span {
+      color: var(--muted);
+    }
+
+    .theme-selector select {
+      min-width: 140px;
+    }
+
+    .config-table-select {
+      margin-top: 6px;
+      width: 100%;
+      min-height: 120px;
+      max-height: 160px;
+    }
+
+    .table-picker-panel {
+      max-width: 460px;
+    }
+
+    .table-picker-search {
+      width: 100%;
+      margin-bottom: 8px;
+    }
+
+    .table-picker-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 260px;
+      overflow: auto;
+      margin: 0;
+      padding: 0;
+    }
+
+    .table-picker-entry {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: var(--surface-hover);
+      cursor: pointer;
+      text-align: left;
+      margin-left: 0;
+    }
+
+    .table-picker-entry:hover,
+    .table-picker-entry:focus {
+      border-color: var(--accent);
+      background: rgba(39, 110, 241, 0.12);
+      outline: none;
+    }
+
+    .table-picker-entry strong {
+      font-size: 13px;
+    }
+
+    .table-picker-meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .table-picker-empty {
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      align-self: flex-start;
+      margin: 0;
+      width: auto;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      flex-shrink: 0;
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .checkbox-label .checkbox-text {
+      cursor: default;
+      line-height: 1.4;
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .config-actions {
+      display: flex;
+      justify-content: flex-start;
+      gap: 8px;
+    }
+
+    .config-form small {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .toast-container {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 1200;
+      pointer-events: none;
+    }
+
+    .toast {
+      min-width: 240px;
+      max-width: 360px;
+      padding: 12px 14px;
+      border-radius: 6px;
+      box-shadow: var(--toast-shadow);
+      background: var(--surface);
+      border-left: 4px solid var(--accent);
+      color: var(--fg);
+      font-size: 13px;
+      pointer-events: auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      opacity: 0;
+      transform: translateY(-8px);
+      animation: toast-in 0.18s ease forwards;
+    }
+
+    .toast.toast-success {
+      border-left-color: #2e9d46;
+    }
+
+    .toast.toast-error {
+      border-left-color: #d64545;
+    }
+
+    .toast.toast-info {
+      border-left-color: #276ef1;
+    }
+
+    .toast-hiding {
+      animation: toast-out 0.18s ease forwards;
+    }
+
+    .toast button {
+      background: transparent;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 0;
+    }
+
+    @keyframes toast-in {
+      from {
+        opacity: 0;
+        transform: translateY(-8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes toast-out {
+      from {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateY(-6px);
+      }
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: var(--overlay);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    .modal-panel {
+      background: var(--surface);
+      color: var(--fg);
+      border-radius: 8px;
+      min-width: 280px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: var(--modal-shadow);
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .modal-panel h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+    }
+
+    .modal-panel form {
+      display: grid;
+      gap: 12px;
+    }
+
+    .modal-panel p {
+      margin: 0 0 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .modal-panel label {
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    form {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      font-size: 13px;
+      gap: 4px;
+      max-width: 480px;
+      width: 100%;
+    }
+
+    input, select, textarea {
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: inherit;
+      max-width: 100%;
+      background: var(--input-bg);
+      color: var(--fg);
+      box-sizing: border-box;
+    }
+
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    select:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      background: rgba(39, 110, 241, 0.08);
+      box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 1px rgba(39, 110, 241, 0.2);
+    }
+
+    textarea {
+      min-height: calc(1.35em * 3);
+      width: 100%;
+      box-sizing: border-box;
+      resize: vertical;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    #jsonOutput {
+      font-family: "Consolas", "Fira Code", Menlo, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre;
+      min-height: 160px;
+    }
+
+    .warning {
+      margin: 0;
+      color: #b46b00;
+      font-size: 12px;
+    }
+
+    /* 数据库文件选择器样式 */
+    .db-picker-panel {
+      max-width: 560px;
+      width: 90vw;
+    }
+
+    .db-picker-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .db-picker-path {
+      flex: 1;
+      padding: 6px 10px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .db-picker-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-height: 360px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-alt);
+    }
+
+    .db-picker-list li {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .db-picker-list li:last-child {
+      border-bottom: none;
+    }
+
+    .db-picker-list button {
+      width: 100%;
+      padding: 10px 12px;
+      border: none;
+      background: transparent;
+      color: var(--fg);
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: background-color 0.15s ease;
+    }
+
+    .db-picker-list button:hover {
+      background: var(--surface-hover);
+    }
+
+    .db-picker-list button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+
+    .db-picker-icon {
+      font-size: 18px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .db-picker-icon.directory {
+      color: #4a90e2;
+    }
+
+    .db-picker-icon.file {
+      color: #7ed321;
+    }
+
+    .db-picker-name {
+      flex: 1;
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .db-picker-type {
+      font-size: 11px;
+      color: var(--muted);
+      padding: 2px 6px;
+      background: var(--bg);
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .db-picker-empty {
+      padding: 32px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>树形数据编辑器（原生 JS 示范）</h1>
+    <div class="theme-selector">
+      <span>主题模式</span>
+      <select id="themePreference">
+        <option value="system">跟随系统</option>
+        <option value="light">浅色</option>
+        <option value="dark">深色</option>
+      </select>
+    </div>
+  </header>
+  <div class="menu-bar-container">
+    <div class="menu-bar">
+      <div class="menu-dropdown" id="nodeMenu">
+        <button type="button">节点操作</button>
+        <div class="menu-dropdown-content">
+          <button id="addRoot" class="menu-item">
+            <span>添加根节点</span>
+            <span class="menu-shortcut">Ctrl+N</span>
+          </button>
+          <div class="menu-separator"></div>
+          <button id="undo" class="menu-item" disabled>
+            <span>撤销</span>
+            <span class="menu-shortcut">Ctrl+Z</span>
+          </button>
+          <button id="rebalanceSort" class="menu-item" disabled style="display: none !important;">
+            <span>重排排序</span>
+            <span class="menu-shortcut">Ctrl+Shift+R</span>
+          </button>
+        </div>
+      </div>
+      <div class="menu-dropdown" id="viewMenu">
+        <button type="button">视图</button>
+        <div class="menu-dropdown-content">
+          <button id="toggleCollapse" class="menu-item">
+            <span>全部折叠/展开</span>
+            <span class="menu-shortcut">Ctrl+Shift+C</span>
+          </button>
+          <div class="menu-separator"></div>
+          <button id="resetLayout" class="menu-item">
+            <span>重置布局</span>
+            <span class="menu-shortcut">Ctrl+Shift+L</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="app">
+    <div id="leftColumn">
+      <section id="controlPanelSection">
+        <h2>功能面板</h2>
+        <div class="section-content column">
+          <p class="warning">请先运行 <code>python server.py</code> 启动接口；操作会直接读写 SQLite（默认 treedb.sqlite）。</p>
+          <div class="control-panel-toggle">
+            <select id="controlPanelMode">
+              <option value="config">数据源配置</option>
+              <option value="search">节点搜索</option>
+            </select>
+          </div>
+          <div id="configPanel" class="control-panel">
+            <form id="configForm" class="config-form">
+              <h3>数据源配置</h3>
+              <div class="config-grid">
+                <div class="field-group">
+                  <label for="configDbPath">数据库文件路径</label>
+                  <div class="input-with-button">
+                    <input id="configDbPath" name="db_path" type="text" placeholder="C:\\path\\to\\database.db" required>
+                    <button type="button" id="configBrowseDb">浏览...</button>
+                  </div>
+                </div>
+                <div class="field-group">
+                  <label for="configTableName">表名</label>
+                  <div class="input-with-button">
+                    <input id="configTableName" name="table_name" type="text" placeholder="tool" list="configTableSuggestions" required>
+                    <button type="button" id="configFetchTables">列出表</button>
+                  </div>
+                  <datalist id="configTableSuggestions"></datalist>
+                </div>
+                <div class="field-group">
+                  <label for="configIdField">主键字段</label>
+                  <input id="configIdField" name="id_field" type="text" placeholder="id" required>
+                </div>
+                <div class="field-group">
+                  <label for="configParentField">父节点字段</label>
+                  <input id="configParentField" name="parent_field" type="text" placeholder="parent_id" required>
+                </div>
+                <div class="field-group checkbox-group">
+                  <div class="checkbox-label">
+                    <input id="configAutoBootstrap" name="auto_bootstrap" type="checkbox">
+                    <span class="checkbox-text">首次自动创建示例数据</span>
+                  </div>
+                </div>
+              </div>
+              <div class="config-actions">
+                <button type="submit" class="primary">应用配置</button>
+                <button type="button" id="configRefresh">刷新配置</button>
+              </div>
+              <p id="configSessionWarning" class="warning" hidden>当前数据源已在其他标签页使用，请先关闭相关页面或释放会话。</p>
+              <small>更改后会立即重新加载元数据与树数据。</small>
+            </form>
+          </div>
+          <div id="searchPanel" class="control-panel" hidden>
+            <div class="search-panel">
+              <div class="tree-toolbar search-toolbar">
+                <div class="search-input-row">
+                  <input type="search" id="treeSearch" placeholder="搜索节点..." autocomplete="off">
+                  <button type="button" id="clearTreeSearch" disabled>清除</button>
+                </div>
+                <div class="search-nav-row">
+                  <button type="button" id="treeSearchPrev" disabled>上一个</button>
+                  <span id="treeSearchInfo" class="tree-search-info"></span>
+                  <button type="button" id="treeSearchNext" disabled>下一个</button>
+                </div>
+              </div>
+              <div id="searchResults" class="search-results"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="panel-resizer" id="leftResizer"></div>
+
+    <section id="treePane">
+      <h2>树形结构</h2>
+      <div class="section-content" id="treePaneContent">
+        <div id="treeContainer"></div>
+      </div>
+    </section>
+
+    <div class="panel-resizer" id="rightResizer"></div>
+    
+    <section id="detailsPaneSection">
+      <div class="section-heading">
+        <h2>节点详情</h2>
+        <span id="detailsActiveNode" class="details-chip" hidden></span>
+      </div>
+      <div class="section-content column">
+        <div id="detailsPane">选择左侧节点以编辑内容。</div>
+        <hr>
+        <h2>JSON 预览</h2>
+        <textarea id="jsonOutput" readonly></textarea>
+        <button id="copyJson">复制 JSON</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    const API_ENDPOINT = '/api/nodes';
+    const META_ENDPOINT = '/api/meta';
+    const FOREIGN_ENDPOINT_BASE = '/api/foreign/';
+    const RESTORE_ENDPOINT = '/api/nodes/restore';
+    const SORT_REBUILD_ENDPOINT = '/api/sort-order/rebuild';
+    const CONFIG_ENDPOINT = '/api/config';
+    const CONFIG_DB_FILES_ENDPOINT = '/api/config/db-files';
+    const CONFIG_TABLES_ENDPOINT = '/api/config/tables';
+  const SESSION_ENDPOINT = '/api/session';
+    const LOADING_SENTINEL = '__loading__';
+  const NUMERIC_TYPES = ['INTEGER', 'INT', 'BIGINT', 'SMALLINT', 'REAL', 'FLOAT', 'DOUBLE', 'NUMERIC', 'DECIMAL'];
+  const BOOLEAN_TYPES = ['BOOLEAN', 'BOOL'];
+  const TEXTAREA_TYPES = ['TEXT', 'CLOB', 'CHAR', 'VARCHAR', 'NVARCHAR', 'NCHAR', 'LONGTEXT'];
+    const DEFAULT_CONFIG = {
+      db_path: '',
+      table_name: '',
+      id_field: 'id',
+      parent_field: 'parent_id',
+      auto_bootstrap: false
+    };
+
+  const THEME_STORAGE_KEY = 'treedb.themePreference';
+  const CONTROL_PANEL_STORAGE_KEY = 'treedb.controlPanelMode';
+  const CONFIG_STORAGE_KEY = 'treedb.lastConfigSnapshot';
+  const SESSION_STORAGE_KEY = 'treedb.activeSessionClaim';
+  const LAYOUT_STORAGE_KEY = 'treedb.sessionLayoutWidths';  // 使用sessionStorage，每个标签页独立
+  const CLIENT_ID = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const pendingExternalClaimChecks = new Set();
+  const themeMedia = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  let currentThemePreference = 'system';
+  let activeSessionId = null;
+  let nodeContextMenuElement = null;
+  let nodeContextMenuCleanup = null;
+  let searchResultContextMenuElement = null;
+  let searchResultContextMenuCleanup = null;
+
+    function getSystemTheme() {
+      return themeMedia && themeMedia.matches ? 'dark' : 'light';
+    }
+
+    function loadStoredThemePreference() {
+      try {
+        const stored = localStorage.getItem(THEME_STORAGE_KEY);
+        if (stored === 'light' || stored === 'dark' || stored === 'system') {
+          return stored;
+        }
+      } catch (err) {
+        console.warn('无法读取主题设置', err);
+      }
+      return 'system';
+    }
+
+    function applyThemePreference(mode) {
+      currentThemePreference = mode;
+      const root = document.documentElement;
+      root.classList.remove('theme-light', 'theme-dark');
+      if (mode === 'light') {
+        root.classList.add('theme-light');
+      } else if (mode === 'dark') {
+        root.classList.add('theme-dark');
+      }
+      const effective = mode === 'system' ? getSystemTheme() : mode;
+      root.dataset.themePreference = mode;
+      root.dataset.themeEffective = effective;
+    }
+
+    function persistThemePreference(mode) {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, mode);
+      } catch (err) {
+        console.warn('无法保存主题设置', err);
+      }
+    }
+
+    function loadStoredControlPanelMode() {
+      try {
+        const stored = localStorage.getItem(CONTROL_PANEL_STORAGE_KEY);
+        if (stored === 'config' || stored === 'search') {
+          return stored;
+        }
+      } catch (err) {
+        console.warn('无法读取功能面板设置', err);
+      }
+      return null;
+    }
+
+    function persistControlPanelMode(mode) {
+      if (mode !== 'config' && mode !== 'search') {
+        return;
+      }
+      try {
+        localStorage.setItem(CONTROL_PANEL_STORAGE_KEY, mode);
+      } catch (err) {
+        console.warn('无法保存功能面板设置', err);
+      }
+    }
+
+    function getConfigStorage() {
+      try {
+        return window.sessionStorage;
+      } catch (err) {
+        console.warn('无法访问 sessionStorage', err);
+        return null;
+      }
+    }
+
+    function loadStoredConfigSnapshot() {
+      const storage = getConfigStorage();
+      if (!storage) {
+        try {
+          const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
+          if (!raw) {
+            return null;
+          }
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            localStorage.removeItem(CONFIG_STORAGE_KEY);
+            return parsed;
+          }
+        } catch (err) {
+          console.warn('无法读取配置缓存', err);
+        }
+        return null;
+      }
+      try {
+        const raw = storage.getItem(CONFIG_STORAGE_KEY);
+        if (!raw) {
+          return null;
+        }
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          return parsed;
+        }
+      } catch (err) {
+        console.warn('无法读取配置缓存', err);
+      }
+      return null;
+    }
+
+    function persistConfigSnapshot(snapshot) {
+      if (!snapshot || typeof snapshot !== 'object') {
+        return;
+      }
+      try {
+        const storage = getConfigStorage();
+        if (storage) {
+          storage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(snapshot));
+        }
+      } catch (err) {
+        console.warn('无法保存配置缓存', err);
+      }
+    }
+
+    function isValidSessionClaim(claim) {
+      if (!claim || typeof claim !== 'object') {
+        return false;
+      }
+      if (!claim.session_id || !claim.client_id) {
+        return false;
+      }
+      return true;
+    }
+
+    function loadStoredSessionClaims() {
+      try {
+        const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (!raw) {
+          return [];
+        }
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(isValidSessionClaim);
+        }
+        if (parsed && typeof parsed === 'object' && parsed.session_id) {
+          return isValidSessionClaim(parsed) ? [parsed] : [];
+        }
+      } catch (err) {
+        console.warn('无法读取会话占用信息', err);
+      }
+      return [];
+    }
+
+    function persistSessionClaims(claims) {
+      try {
+        if (!claims || !claims.length) {
+          localStorage.removeItem(SESSION_STORAGE_KEY);
+        } else {
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(claims));
+        }
+      } catch (err) {
+        console.warn('无法保存会话占用信息', err);
+      }
+    }
+
+    function isSessionClaimOwnedByCurrentClient(claim) {
+      return Boolean(claim && claim.client_id === CLIENT_ID);
+    }
+
+    function rememberOwnedSession(sessionId) {
+      if (!sessionId) {
+        clearOwnedSessionClaim();
+        return;
+      }
+      const claim = {
+        session_id: sessionId,
+        client_id: CLIENT_ID,
+        db_path: state.config ? state.config.db_path || '' : '',
+        table_name: state.config ? state.config.table_name || '' : '',
+        updated_at: Date.now()
+      };
+      const claims = loadStoredSessionClaims()
+        .filter(entry => entry.session_id !== sessionId && entry.client_id !== CLIENT_ID);
+      claims.push(claim);
+      persistSessionClaims(claims);
+      updateConfigApplyAvailability();
+    }
+
+    function clearOwnedSessionClaim() {
+      const claims = loadStoredSessionClaims();
+      const next = claims.filter(entry => entry.client_id !== CLIENT_ID);
+      if (next.length !== claims.length) {
+        persistSessionClaims(next);
+      }
+    }
+
+    function doesClaimConflictWithConfig(claim, config) {
+      if (!claim || !config) {
+        return false;
+      }
+      const claimDb = ensureString(claim.db_path).trim();
+      const claimTable = ensureString(claim.table_name).trim();
+      const configDb = ensureString(config.db_path).trim();
+      const configTable = ensureString(config.table_name).trim();
+      if (!claimDb || !claimTable || !configDb || !configTable) {
+        return false;
+      }
+      return claimDb === configDb && claimTable === configTable;
+    }
+
+    function getProspectiveConfigForBlocking() {
+      try {
+        return readConfigFormValues();
+      } catch (err) {
+        console.warn('读取表单配置用于冲突检测失败', err);
+        return state.config;
+      }
+    }
+
+    function resolveConflictingClaim({ prospectiveConfig, claims } = {}) {
+      const snapshot = prospectiveConfig || getProspectiveConfigForBlocking();
+      const entries = Array.isArray(claims) ? claims : loadStoredSessionClaims();
+      return entries.find(claim => !isSessionClaimOwnedByCurrentClient(claim) && doesClaimConflictWithConfig(claim, snapshot)) || null;
+    }
+
+    async function verifyExternalSessionClaim(claim) {
+      const sessionId = claim && claim.session_id ? String(claim.session_id) : '';
+      if (!sessionId || pendingExternalClaimChecks.has(sessionId)) {
+        return;
+      }
+      pendingExternalClaimChecks.add(sessionId);
+      try {
+        const url = `${CONFIG_ENDPOINT}?session=${encodeURIComponent(sessionId)}`;
+        const resp = await fetch(url);
+        if (resp.status === 410 || resp.status === 404) {
+          const claims = loadStoredSessionClaims();
+          const remaining = claims.filter(entry => entry.session_id !== sessionId);
+          if (remaining.length !== claims.length) {
+            persistSessionClaims(remaining);
+            if (state.sessionBlockedBy && state.sessionBlockedBy.session_id === sessionId) {
+              state.sessionBlockedBy = null;
+            }
+            updateConfigApplyAvailability();
+            showToast('检测到遗留会话占用，已重置，可重新应用配置。', 'info');
+            detectExternalSessionClaim();
+          }
+        }
+      } catch (err) {
+        console.warn('验证会话占用状态失败', err);
+      } finally {
+        pendingExternalClaimChecks.delete(sessionId);
+      }
+    }
+
+    function detectExternalSessionClaim() {
+      const claims = loadStoredSessionClaims();
+      const previousClaim = state.sessionBlockedBy;
+      const configSnapshot = getProspectiveConfigForBlocking();
+      const wasBlocked = Boolean(!activeSessionId && doesClaimConflictWithConfig(previousClaim, configSnapshot));
+      const conflicting = resolveConflictingClaim({ prospectiveConfig: configSnapshot, claims });
+      if (conflicting) {
+        verifyExternalSessionClaim(conflicting).catch(err => {
+          console.warn('检查会话占用状态过程中出错', err);
+        });
+      }
+      const { blocked: isBlocked } = updateConfigApplyAvailability({ prospectiveConfig: configSnapshot, claims, conflictingClaim: conflicting });
+      if (isBlocked && !wasBlocked) {
+        showToast('当前数据源已在其他标签页使用，无法重复打开。', 'error');
+      } else if (!isBlocked && wasBlocked) {
+        showToast('数据源已释放，可以重新应用配置。', 'info');
+      }
+    }
+
+    currentThemePreference = loadStoredThemePreference();
+    applyThemePreference(currentThemePreference);
+
+    if (themeMedia) {
+      const listener = () => {
+        if (currentThemePreference === 'system') {
+          applyThemePreference('system');
+        }
+      };
+      if (typeof themeMedia.addEventListener === 'function') {
+        themeMedia.addEventListener('change', listener);
+      } else if (typeof themeMedia.addListener === 'function') {
+        themeMedia.addListener(listener);
+      }
+    }
+
+    function createEmptySearchState() {
+      return {
+        raw: '',
+        term: '',
+        active: false,
+        hasMatches: true,
+        matched: new Set(),
+        orderedMatches: [],
+        currentIndex: -1
+      };
+    }
+
+    const state = {
+      data: [],
+      selectedId: null,
+      collapsed: new Set(),
+      meta: { columns: {}, foreign_keys: {}, column_info: {} },
+      foreignOptions: {},
+      history: [],
+      isUndoing: false,
+      availableTables: [],
+      config: { ...DEFAULT_CONFIG },
+      search: createEmptySearchState(),
+      sessionBlockedBy: null
+    };
+
+    function ensureString(value) {
+      if (value === null || value === undefined) {
+        return '';
+      }
+      return String(value);
+    }
+
+    function normalizeConfigSnapshot(raw) {
+      const normalized = { ...DEFAULT_CONFIG };
+      if (raw && typeof raw === 'object') {
+        if (Object.prototype.hasOwnProperty.call(raw, 'db_path')) {
+          normalized.db_path = ensureString(raw.db_path).trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(raw, 'table_name')) {
+          normalized.table_name = ensureString(raw.table_name).trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(raw, 'id_field')) {
+          normalized.id_field = ensureString(raw.id_field).trim() || DEFAULT_CONFIG.id_field;
+        }
+        if (Object.prototype.hasOwnProperty.call(raw, 'parent_field')) {
+          normalized.parent_field = ensureString(raw.parent_field).trim() || DEFAULT_CONFIG.parent_field;
+        }
+        if (Object.prototype.hasOwnProperty.call(raw, 'auto_bootstrap')) {
+          normalized.auto_bootstrap = toBoolean(raw.auto_bootstrap);
+        }
+      }
+      return normalized;
+    }
+
+    function hasMeaningfulConfigData(raw) {
+      if (!raw || typeof raw !== 'object') {
+        return false;
+      }
+      const dbPath = Object.prototype.hasOwnProperty.call(raw, 'db_path') ? ensureString(raw.db_path).trim() : '';
+      const tableName = Object.prototype.hasOwnProperty.call(raw, 'table_name') ? ensureString(raw.table_name).trim() : '';
+      return Boolean(dbPath) || Boolean(tableName);
+    }
+
+    function toBoolean(value) {
+      if (typeof value === 'boolean') {
+        return value;
+      }
+      if (typeof value === 'number') {
+        return value !== 0;
+      }
+      if (typeof value === 'string') {
+        const lowered = value.trim().toLowerCase();
+        if (!lowered) {
+          return false;
+        }
+        return ['true', '1', 'yes', 'y', 'on'].includes(lowered);
+      }
+      return false;
+    }
+
+    function makeFieldId(key) {
+      return `field-${String(key).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    }
+
+    function getColumnType(key) {
+      if (!state.meta || !state.meta.columns) {
+        return '';
+      }
+      const metaEntry = state.meta.columns[key];
+      if (!metaEntry) {
+        return '';
+      }
+      if (typeof metaEntry === 'string') {
+        return metaEntry.toUpperCase();
+      }
+      if (typeof metaEntry === 'object' && metaEntry.type) {
+        return String(metaEntry.type).toUpperCase();
+      }
+      return '';
+    }
+
+    function syncConfigForm(config = state.config) {
+      if (!dom.configForm) {
+        return;
+      }
+      if (dom.configDbPath) {
+        dom.configDbPath.value = config.db_path || '';
+      }
+      if (dom.configTableName) {
+        dom.configTableName.value = config.table_name || '';
+      }
+      if (dom.configIdField) {
+        dom.configIdField.value = config.id_field || '';
+      }
+      if (dom.configParentField) {
+        dom.configParentField.value = config.parent_field || '';
+      }
+      if (dom.configAutoBootstrap) {
+        dom.configAutoBootstrap.checked = Boolean(config.auto_bootstrap);
+      }
+      updateTableSuggestions(state.availableTables);
+      updateConfigApplyAvailability();
+    }
+
+    function applyConfigSnapshot(snapshot, options = {}) {
+      const { skipFormSync = false, persist = false } = options;
+      const normalized = normalizeConfigSnapshot(snapshot);
+      state.config = normalized;
+      syncActiveSessionClaim();
+      if (!skipFormSync) {
+        syncConfigForm(normalized);
+      }
+      if (persist) {
+        persistConfigSnapshot(normalized);
+      }
+      updateSortButtonVisibility();
+      updateConfigApplyAvailability();
+      return normalized;
+    }
+
+    function readConfigFormValues() {
+      if (!dom.configForm) {
+        return { ...state.config };
+      }
+      return normalizeConfigSnapshot({
+        db_path: dom.configDbPath ? dom.configDbPath.value : state.config.db_path,
+        table_name: dom.configTableName ? dom.configTableName.value : state.config.table_name,
+        id_field: dom.configIdField ? dom.configIdField.value : state.config.id_field,
+        parent_field: dom.configParentField ? dom.configParentField.value : state.config.parent_field,
+        auto_bootstrap: dom.configAutoBootstrap ? dom.configAutoBootstrap.checked : state.config.auto_bootstrap
+      });
+    }
+
+    function resetClientStateForConfigChange() {
+      state.selectedId = null;
+      state.collapsed.clear();
+      state.history = [];
+      state.foreignOptions = {};
+      state.availableTables = [];
+      updateTableSuggestions([]);
+      updateUndoButton();
+      resetTreeSearch({ silent: true });
+    }
+
+    function renderSearchResults() {
+      if (!dom.searchResults) {
+        return;
+      }
+      const container = dom.searchResults;
+      container.innerHTML = '';
+      closeSearchResultContextMenu();
+      const term = state.search.raw ? state.search.raw.trim() : '';
+      if (!term) {
+        const placeholder = document.createElement('p');
+        placeholder.className = 'search-empty-state';
+        placeholder.textContent = '输入关键字以搜索节点。';
+        container.appendChild(placeholder);
+        return;
+      }
+      if (!state.search.active || !state.search.hasMatches) {
+        const empty = document.createElement('p');
+        empty.className = 'search-empty-state';
+        empty.textContent = '未找到匹配的节点。';
+        container.appendChild(empty);
+        return;
+      }
+      const list = document.createElement('ul');
+      list.className = 'search-results-list';
+      state.search.orderedMatches.forEach((key, index) => {
+        const row = getRowByIdKey(key);
+        if (!row) {
+          return;
+        }
+        const item = document.createElement('li');
+        item.className = 'search-result-item';
+        if (index === state.search.currentIndex) {
+          item.classList.add('active');
+        }
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'search-result-button';
+        const title = document.createElement('span');
+        title.className = 'search-result-title';
+        const label = deriveLabel(row) || '(空)';
+        title.textContent = label;
+        button.appendChild(title);
+        const meta = document.createElement('span');
+        meta.className = 'search-result-meta';
+        const id = getRowId(row);
+        const parentId = getRowParentId(row);
+        const children = getDirectChildrenCount(id);
+        meta.textContent = `${getIdField()}=${id ?? '无'} · ${getParentField()}=${parentId ?? '无'} · child=${children}`;
+        button.appendChild(meta);
+        button.addEventListener('click', () => focusSearchResult(index, { scroll: false, expand: false }));
+        button.addEventListener('contextmenu', event => openSearchResultContextMenu(index, event));
+        item.appendChild(button);
+        list.appendChild(item);
+      });
+      container.appendChild(list);
+    }
+
+    function switchControlPanel(mode, options = {}) {
+      const { focusSearch = false, persist = false } = options;
+      const normalized = mode === 'search' ? 'search' : 'config';
+      if (dom.controlPanelMode && dom.controlPanelMode.value !== normalized) {
+        dom.controlPanelMode.value = normalized;
+      }
+      if (dom.configPanel) {
+        dom.configPanel.hidden = normalized !== 'config';
+      }
+      if (dom.searchPanel) {
+        dom.searchPanel.hidden = normalized !== 'search';
+      }
+      if (normalized === 'search' && focusSearch && dom.treeSearch) {
+        requestAnimationFrame(() => dom.treeSearch && dom.treeSearch.focus());
+      }
+      if (persist) {
+        persistControlPanelMode(normalized);
+      }
+      renderSearchResults();
+    }
+
+    function updateTreeSearchUI() {
+      const hasTerm = Boolean(state.search.raw);
+      const active = state.search.active;
+      const totalMatches = active ? state.search.orderedMatches.length : 0;
+      const hasMatches = active && totalMatches > 0;
+      const currentIndex = state.search.currentIndex;
+      if (dom.treeSearchClear) {
+        dom.treeSearchClear.disabled = !hasTerm;
+      }
+      if (dom.treeSearchPrev) {
+        dom.treeSearchPrev.disabled = !hasMatches || totalMatches <= 1;
+      }
+      if (dom.treeSearchNext) {
+        dom.treeSearchNext.disabled = !hasMatches || totalMatches <= 1;
+      }
+      if (dom.treeSearchInfo) {
+        if (!active) {
+          dom.treeSearchInfo.textContent = '';
+        } else if (!hasMatches) {
+          dom.treeSearchInfo.textContent = '0 / 0';
+        } else {
+          const safeIndex = currentIndex >= 0 && currentIndex < totalMatches ? currentIndex : -1;
+          const position = safeIndex >= 0 ? safeIndex + 1 : '–';
+          dom.treeSearchInfo.textContent = `${position} / ${totalMatches}`;
+        }
+      }
+      renderSearchResults();
+    }
+
+    function resetTreeSearch(options = {}) {
+      const { silent = false } = options;
+      state.search = createEmptySearchState();
+      if (dom.treeSearch) {
+        dom.treeSearch.value = '';
+      }
+      updateTreeSearchUI();
+      if (!silent) {
+        renderAll();
+      }
+    }
+
+    function collectRecordSearchTokens(record) {
+      if (!record) {
+        return [];
+      }
+      const tokens = [];
+      const idField = getIdField();
+      const parentField = getParentField();
+      const label = deriveLabel(record);
+      if (label) {
+        tokens.push(label);
+      }
+      Object.entries(record).forEach(([key, value]) => {
+        if (value === null || value === undefined) {
+          return;
+        }
+        let normalizedValue;
+        try {
+          normalizedValue = String(value);
+        } catch (_) {
+          return;
+        }
+        tokens.push(normalizedValue);
+        if (key !== idField && key !== parentField) {
+          tokens.push(`${key}:${normalizedValue}`);
+        } else {
+          tokens.push(`${key}=${normalizedValue}`);
+        }
+      });
+      return tokens;
+    }
+
+    function doesRecordMatchSearch(record, normalizedTerm) {
+      if (!record || !normalizedTerm) {
+        return false;
+      }
+      const term = normalizedTerm.toLowerCase();
+      const tokens = collectRecordSearchTokens(record);
+      for (let i = 0; i < tokens.length; i += 1) {
+        const token = tokens[i];
+        if (!token) {
+          continue;
+        }
+        try {
+          if (token.toString().toLowerCase().includes(term)) {
+            return true;
+          }
+        } catch (_) {
+          continue;
+        }
+      }
+      return false;
+    }
+
+    function applyTreeSearchTerm(rawValue, options = {}) {
+      const { silent = false, skipDomUpdate = false } = options;
+      const value = rawValue ? String(rawValue) : '';
+      if (!skipDomUpdate && dom.treeSearch && dom.treeSearch.value !== value) {
+        dom.treeSearch.value = value;
+      }
+      state.search.raw = value;
+      const normalized = value.trim().toLowerCase();
+      state.search.term = normalized;
+      let shouldScrollToSelection = false;
+      if (!normalized) {
+        const cleared = createEmptySearchState();
+        cleared.raw = value;
+        cleared.term = '';
+        state.search = cleared;
+      } else {
+        const matched = new Set();
+        state.data.forEach(row => {
+          if (!row) {
+            return;
+          }
+          if (!doesRecordMatchSearch(row, normalized)) {
+            return;
+          }
+          const id = getRowId(row);
+          const key = toIdKey(id);
+          matched.add(key);
+        });
+        state.search.active = true;
+        state.search.hasMatches = matched.size > 0;
+        state.search.matched = matched;
+        const orderedMatches = [];
+        state.data.forEach(row => {
+          const key = toIdKey(getRowId(row));
+          if (matched.has(key)) {
+            orderedMatches.push(key);
+          }
+        });
+        state.search.orderedMatches = orderedMatches;
+        if (!state.search.hasMatches) {
+          state.search.currentIndex = -1;
+          state.selectedId = null;
+        } else {
+          const selectedKey = state.selectedId === null || state.selectedId === undefined
+            ? null
+            : toIdKey(state.selectedId);
+          let index = -1;
+          if (selectedKey && matched.has(selectedKey)) {
+            index = orderedMatches.indexOf(selectedKey);
+          }
+          if (index === -1) {
+            index = 0;
+            const firstKey = orderedMatches[0];
+            const firstRow = getRowByIdKey(firstKey);
+            if (firstRow) {
+              expandAncestorsForRow(firstRow, { render: false });
+              const firstId = getRowId(firstRow);
+              if (!idsEqual(firstId, state.selectedId)) {
+                state.selectedId = firstId;
+              }
+              shouldScrollToSelection = true;
+            }
+          }
+          state.search.currentIndex = index;
+        }
+      }
+      updateTreeSearchUI();
+      if (!silent) {
+        renderAll();
+        if (shouldScrollToSelection) {
+          requestAnimationFrame(() => scrollSelectedTreeNodeIntoView({ smooth: true }));
+        }
+      }
+    }
+
+    function navigateSearch(offset) {
+      if (!state.search.active) {
+        return;
+      }
+      const matches = state.search.orderedMatches;
+      if (!matches || !matches.length) {
+        return;
+      }
+      const total = matches.length;
+      let index = state.search.currentIndex;
+      if (index === -1) {
+        index = offset > 0 ? 0 : total - 1;
+      } else {
+        index = (index + offset + total) % total;
+      }
+      focusSearchResult(index, { scroll: true });
+    }
+
+    function focusSearchResult(index, options = {}) {
+      const { scroll = true, expand = true } = options;
+      if (!state.search.active) {
+        return;
+      }
+      const matches = state.search.orderedMatches;
+      if (!matches || index < 0 || index >= matches.length) {
+        return;
+      }
+      const key = matches[index];
+      const row = getRowByIdKey(key);
+      if (!row) {
+        return;
+      }
+      const id = getRowId(row);
+      state.search.currentIndex = index;
+      if (expand) {
+        expandAncestorsForRow(row);
+      }
+      handleNodeSelection(id);
+      if (scroll) {
+        scrollSelectedTreeNodeIntoView({ smooth: true });
+      }
+    }
+
+    function getColumnInfo(key) {
+      if (!state.meta || !state.meta.column_info) {
+        return null;
+      }
+      const info = state.meta.column_info[key];
+      return info && typeof info === 'object' ? info : null;
+    }
+
+    function toggleConfigControls(disabled) {
+      if (!dom.configForm) {
+        return () => {};
+      }
+      const elements = Array.from(dom.configForm.elements || []);
+      const snapshots = elements.map(element => ({ element, disabled: element.disabled }));
+      elements.forEach(element => {
+        if ('disabled' in element) {
+          element.disabled = disabled;
+        }
+      });
+      return () => {
+        snapshots.forEach(({ element, disabled: previous }) => {
+          if ('disabled' in element) {
+            element.disabled = previous;
+          }
+        });
+        updateConfigApplyAvailability();
+      };
+    }
+
+    function updateTableSuggestions(tables = []) {
+      if (!dom.configTableSuggestions) {
+        return;
+      }
+      dom.configTableSuggestions.innerHTML = '';
+      tables.forEach(entry => {
+        if (!entry || !entry.name) {
+          return;
+        }
+        const option = document.createElement('option');
+        option.value = String(entry.name);
+        if (Array.isArray(entry.columns) && entry.columns.length) {
+          const preview = entry.columns.slice(0, 5).map(col => String(col)).join(', ');
+          const suffix = entry.columns.length > 5 ? ', …' : '';
+          option.textContent = `${entry.name} (${preview}${suffix})`;
+        } else {
+          option.textContent = String(entry.name);
+        }
+        dom.configTableSuggestions.appendChild(option);
+      });
+    }
+
+    function getDirectoryFromPath(path) {
+      if (!path) {
+        return '';
+      }
+      const normalized = String(path).replace(/\\/g, '/');
+      const trimmed = normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+      if (!trimmed) {
+        return '';
+      }
+      const lastSlash = trimmed.lastIndexOf('/');
+      if (lastSlash <= 0) {
+        return '';
+      }
+      let directory = trimmed.slice(0, lastSlash);
+      if (/^[A-Za-z]:$/.test(directory)) {
+        directory += '/';
+      }
+      return directory;
+    }
+
+    async function fetchTablesForPath(dbPath, options = {}) {
+      const { silent = false, toastOnSuccess = false } = options;
+      const normalizedPath = ensureString(dbPath).trim();
+      if (!normalizedPath) {
+        state.availableTables = [];
+        updateTableSuggestions([]);
+        return [];
+      }
+      try {
+        const resp = await fetch(`${CONFIG_TABLES_ENDPOINT}?db_path=${encodeURIComponent(normalizedPath)}`);
+        if (!resp.ok) {
+          const message = await extractErrorMessage(resp, `获取表失败：${resp.status}`);
+          throw new Error(message);
+        }
+        const payload = await resp.json();
+        const tablesRaw = payload && Array.isArray(payload.tables) ? payload.tables : [];
+        const tables = tablesRaw
+          .map(entry => ({
+            name: entry && entry.name !== undefined ? String(entry.name) : '',
+            columns: entry && Array.isArray(entry.columns) ? entry.columns.map(col => String(col)) : []
+          }))
+          .filter(entry => entry.name);
+        state.availableTables = tables;
+        updateTableSuggestions(tables);
+        if (toastOnSuccess) {
+          showToast(`已读取 ${tables.length} 个数据表。`, 'success');
+        }
+        return tables;
+      } catch (err) {
+        console.error('列出表失败', err);
+        state.availableTables = [];
+        updateTableSuggestions([]);
+        if (!silent) {
+          const message = err instanceof Error && err.message ? err.message : '获取表列表失败，请检查数据库文件。';
+          showToast(message, 'error');
+        }
+        return [];
+      }
+    }
+
+    async function openDatabasePicker() {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-backdrop';
+      const panel = document.createElement('div');
+      panel.className = 'modal-panel db-picker-panel';
+
+      const title = document.createElement('h3');
+      title.textContent = '选择数据库文件';
+      panel.appendChild(title);
+
+      const nav = document.createElement('div');
+      nav.className = 'db-picker-nav';
+
+      const pathLabel = document.createElement('div');
+      pathLabel.className = 'db-picker-path';
+      nav.appendChild(pathLabel);
+
+      const upBtn = document.createElement('button');
+      upBtn.type = 'button';
+      upBtn.textContent = '上一级';
+      nav.appendChild(upBtn);
+
+      panel.appendChild(nav);
+
+      const list = document.createElement('ul');
+      list.className = 'db-picker-list';
+      panel.appendChild(list);
+
+      const empty = document.createElement('div');
+      empty.className = 'db-picker-empty';
+      empty.textContent = '加载中...';
+      panel.appendChild(empty);
+
+      const footer = document.createElement('div');
+      footer.style.marginTop = '0.75rem';
+      footer.style.textAlign = 'right';
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.textContent = '关闭';
+      footer.appendChild(closeBtn);
+      panel.appendChild(footer);
+
+      overlay.appendChild(panel);
+
+      let currentDir = '';
+      let currentParent = null;
+      let isClosing = false;
+
+      const onKeyDown = event => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close();
+        }
+      };
+
+      function close() {
+        if (isClosing) {
+          return;
+        }
+        isClosing = true;
+        document.removeEventListener('keydown', onKeyDown, true);
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+        if (dom.configDbPath) {
+          dom.configDbPath.focus();
+        }
+      }
+
+      async function loadDirectory(targetPath) {
+        const query = targetPath ? `?dir=${encodeURIComponent(targetPath)}` : '';
+        list.innerHTML = '';
+        empty.textContent = '加载中...';
+        empty.style.display = '';
+        try {
+          const resp = await fetch(`${CONFIG_DB_FILES_ENDPOINT}${query}`);
+          if (!resp.ok) {
+            const message = await extractErrorMessage(resp, `读取目录失败：${resp.status}`);
+            throw new Error(message);
+          }
+          const payload = await resp.json();
+          currentDir = payload && payload.directory ? String(payload.directory) : targetPath || '';
+          currentParent = payload && payload.parent ? String(payload.parent) : null;
+          pathLabel.textContent = currentDir || '(未指定目录)';
+          upBtn.disabled = !currentParent;
+
+          const entries = payload && Array.isArray(payload.entries) ? payload.entries : [];
+          list.innerHTML = '';
+          if (!entries.length) {
+            empty.textContent = '此目录没有可用的数据库文件。';
+            empty.style.display = '';
+          } else {
+            empty.style.display = 'none';
+            entries.forEach(entry => {
+              const li = document.createElement('li');
+              const button = document.createElement('button');
+              button.type = 'button';
+
+              // 添加图标
+              const iconSpan = document.createElement('span');
+              iconSpan.className = 'db-picker-icon ' + (entry.type === 'directory' ? 'directory' : 'file');
+              iconSpan.textContent = entry.type === 'directory' ? '📁' : '📄';
+              button.appendChild(iconSpan);
+
+              // 文件名
+              const nameSpan = document.createElement('span');
+              nameSpan.className = 'db-picker-name';
+              nameSpan.textContent = entry.name || entry.path || '(未知)';
+              button.appendChild(nameSpan);
+
+              // 类型标签
+              const typeSpan = document.createElement('span');
+              typeSpan.className = 'db-picker-type';
+              typeSpan.textContent = entry.type === 'directory' ? '文件夹' : 'SQLite';
+              button.appendChild(typeSpan);
+              button.addEventListener('click', () => {
+                if (entry.type === 'directory') {
+                  loadDirectory(entry.path).catch(err => {
+                    console.error('展开目录失败', err);
+                    showToast('无法读取该目录，请检查路径和权限。', 'error');
+                  });
+                } else if (entry.type === 'file') {
+                  if (dom.configDbPath) {
+                    dom.configDbPath.value = entry.path;
+                  }
+                  if (dom.configTableName) {
+                    dom.configTableName.value = '';
+                  }
+                  close();
+                  fetchTablesForPath(entry.path, { silent: false, toastOnSuccess: true }).catch(err => {
+                    console.error('获取表列表失败', err);
+                  });
+                }
+              });
+              li.appendChild(button);
+              list.appendChild(li);
+            });
+          }
+        } catch (err) {
+          console.error('列出目录内容失败', err);
+          empty.textContent = err instanceof Error && err.message ? err.message : '读取目录失败。';
+          empty.style.display = '';
+          showToast(empty.textContent, 'error');
+        }
+      }
+
+      upBtn.addEventListener('click', () => {
+        if (currentParent) {
+          loadDirectory(currentParent).catch(err => {
+            console.error('返回上一级目录失败', err);
+            showToast('无法返回上一级目录。', 'error');
+          });
+        }
+      });
+
+      closeBtn.addEventListener('click', () => close());
+      overlay.addEventListener('click', event => {
+        if (event.target === overlay) {
+          close();
+        }
+      });
+
+      document.addEventListener('keydown', onKeyDown, true);
+      document.body.appendChild(overlay);
+
+      const initialFromConfig = dom.configDbPath ? dom.configDbPath.value : '';
+      const initialDir = getDirectoryFromPath(initialFromConfig);
+      loadDirectory(initialDir).catch(err => {
+        console.error('初始化目录失败', err);
+        empty.textContent = err instanceof Error && err.message ? err.message : '目录加载失败。';
+        empty.style.display = '';
+        if (initialDir) {
+          loadDirectory('').catch(innerErr => {
+            console.error('回退至默认目录失败', innerErr);
+          });
+        }
+      });
+    }
+
+    function openTablePicker(tables, options = {}) {
+      const entries = Array.isArray(tables) ? tables.slice() : [];
+      if (!entries.length) {
+        showToast('当前数据库没有可用的数据表。', 'info');
+        return;
+      }
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-backdrop';
+
+      const panel = document.createElement('div');
+      panel.className = 'modal-panel table-picker-panel';
+
+      const title = document.createElement('h3');
+      title.textContent = '选择数据表';
+      panel.appendChild(title);
+
+      if (options.dbPath) {
+        const pathHint = document.createElement('p');
+        pathHint.textContent = `数据库：${options.dbPath}`;
+        panel.appendChild(pathHint);
+      }
+
+      const searchInput = document.createElement('input');
+      searchInput.type = 'search';
+      searchInput.placeholder = '搜索表名...';
+      searchInput.autocomplete = 'off';
+      searchInput.className = 'table-picker-search';
+      panel.appendChild(searchInput);
+
+      const list = document.createElement('div');
+      list.className = 'table-picker-list';
+      panel.appendChild(list);
+
+      const empty = document.createElement('div');
+      empty.className = 'table-picker-empty';
+      empty.textContent = '暂无匹配的表。';
+      empty.style.display = 'none';
+      panel.appendChild(empty);
+
+      const actions = document.createElement('div');
+      actions.className = 'modal-actions';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.textContent = '取消';
+      actions.appendChild(cancelBtn);
+      panel.appendChild(actions);
+
+      overlay.appendChild(panel);
+
+      let isClosing = false;
+
+      const close = () => {
+        if (isClosing) {
+          return;
+        }
+        isClosing = true;
+        document.removeEventListener('keydown', onKeyDown, true);
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+        if (dom.configTableName) {
+          dom.configTableName.focus();
+        }
+      };
+
+      const onKeyDown = event => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close();
+        }
+      };
+
+      const render = filterText => {
+        const query = filterText ? filterText.trim().toLowerCase() : '';
+        list.innerHTML = '';
+        const filtered = !query
+          ? entries
+          : entries.filter(entry => entry.name.toLowerCase().includes(query));
+        if (!filtered.length) {
+          empty.style.display = '';
+          empty.textContent = query ? '未找到匹配的表名。' : '没有可用的数据表。';
+          return;
+        }
+        empty.style.display = 'none';
+        filtered.forEach(entry => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'table-picker-entry';
+          const nameEl = document.createElement('strong');
+          nameEl.textContent = entry.name;
+          button.appendChild(nameEl);
+          if (Array.isArray(entry.columns) && entry.columns.length) {
+            const preview = entry.columns.slice(0, 5).map(col => String(col)).join(', ');
+            const suffix = entry.columns.length > 5 ? '，…' : '';
+            const meta = document.createElement('span');
+            meta.className = 'table-picker-meta';
+            meta.textContent = `${entry.columns.length} 列：${preview}${suffix}`;
+            button.appendChild(meta);
+          }
+          button.addEventListener('click', () => {
+            if (dom.configTableName) {
+              dom.configTableName.value = entry.name;
+              dom.configTableName.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            state.config.table_name = entry.name;
+            close();
+            showToast(`已选择数据表：${entry.name}`, 'success');
+          });
+          list.appendChild(button);
+        });
+      };
+
+      cancelBtn.addEventListener('click', () => close());
+      overlay.addEventListener('click', event => {
+        if (event.target === overlay) {
+          close();
+        }
+      });
+      searchInput.addEventListener('input', () => render(searchInput.value));
+
+      document.addEventListener('keydown', onKeyDown, true);
+      document.body.appendChild(overlay);
+      render('');
+      setTimeout(() => searchInput.focus(), 0);
+    }
+
+    function buildConfigPayloadForServer(config) {
+      return {
+        db_path: config.db_path,
+        table_name: config.table_name,
+        id_field: config.id_field,
+        parent_field: config.parent_field,
+        auto_bootstrap: Boolean(config.auto_bootstrap)
+      };
+    }
+
+    async function refreshConfigFromServer(options = {}) {
+      const { silent = false, reload = false, showToastOnSuccess = false } = options;
+      try {
+        const url = activeSessionId ? `${CONFIG_ENDPOINT}?session=${encodeURIComponent(activeSessionId)}` : CONFIG_ENDPOINT;
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          if (resp.status === 410) {
+            handleSessionExpired();
+            return null;
+          }
+          const message = await extractErrorMessage(resp, `配置加载失败：${resp.status}`);
+          throw new Error(message);
+        }
+        const snapshot = await resp.json();
+        const storedConfig = loadStoredConfigSnapshot();
+        const sessionId = snapshot && snapshot.session_id ? String(snapshot.session_id) : null;
+        if (sessionId) {
+          setActiveSession(sessionId);
+        }
+        const hasServerConfig = hasMeaningfulConfigData(snapshot);
+        const hasStoredConfig = hasMeaningfulConfigData(storedConfig);
+        let normalized = null;
+        if (sessionId && hasServerConfig) {
+          normalized = applyConfigSnapshot(snapshot, { persist: true });
+        } else if (!sessionId && hasStoredConfig) {
+          normalized = applyConfigSnapshot(storedConfig, { persist: false });
+        } else if (!sessionId && hasServerConfig) {
+          normalized = applyConfigSnapshot(snapshot, { persist: false });
+        }
+        if (sessionId) {
+          syncActiveSessionClaim();
+        }
+        if (reload) {
+          resetClientStateForConfigChange();
+          await loadMetadata();
+          await loadData();
+        }
+        const effectiveConfig = normalized || (sessionId ? state.config : null);
+        const pathForTables = effectiveConfig && effectiveConfig.db_path ? effectiveConfig.db_path : null;
+        if (pathForTables) {
+          await fetchTablesForPath(pathForTables, { silent: true });
+        }
+        if (showToastOnSuccess) {
+          showToast('配置已刷新。', 'success');
+        }
+        return normalized;
+      } catch (err) {
+        console.error('加载配置失败', err);
+        if (!silent) {
+          const message = err instanceof Error && err.message ? err.message : '读取配置失败，请稍后重试。';
+          showToast(message, 'error');
+        }
+        return null;
+      }
+    }
+
+    async function submitConfigUpdate() {
+      if (!dom.configForm) {
+        return;
+      }
+      if (typeof dom.configForm.checkValidity === 'function' && !dom.configForm.checkValidity()) {
+        dom.configForm.reportValidity();
+        return;
+      }
+      const prospective = getProspectiveConfigForBlocking();
+      const claims = loadStoredSessionClaims();
+      const conflicting = resolveConflictingClaim({ prospectiveConfig: prospective, claims });
+      if (!activeSessionId && conflicting) {
+        updateConfigApplyAvailability({ prospectiveConfig: prospective, claims, conflictingClaim: conflicting });
+        showToast('当前数据源已在其他标签页使用，请先关闭对应页面或释放会话。', 'error');
+        return;
+      }
+      const restoreControls = toggleConfigControls(true);
+      const payload = readConfigFormValues();
+      try {
+        const target = activeSessionId ? `${CONFIG_ENDPOINT}?session=${encodeURIComponent(activeSessionId)}` : CONFIG_ENDPOINT;
+        const resp = await fetch(target, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildConfigPayloadForServer(payload))
+        });
+        if (resp.status === 409) {
+          const message = await extractErrorMessage(resp, '该配置正在被其他会话使用。');
+          throw new Error(message);
+        }
+        if (resp.status === 410) {
+          handleSessionExpired();
+          throw new Error('会话已过期，请重新应用配置。');
+        }
+        if (!resp.ok) {
+          const message = await extractErrorMessage(resp, `配置保存失败：${resp.status}`);
+          throw new Error(message);
+        }
+        const snapshot = await resp.json();
+        if (snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'session_id')) {
+          setActiveSession(snapshot.session_id);
+        }
+        const mergedRaw = {
+          db_path: snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'db_path') ? snapshot.db_path : payload.db_path,
+          table_name: snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'table_name') ? snapshot.table_name : payload.table_name,
+          id_field: snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'id_field') ? snapshot.id_field : payload.id_field,
+          parent_field: snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'parent_field') ? snapshot.parent_field : payload.parent_field,
+          auto_bootstrap: snapshot && Object.prototype.hasOwnProperty.call(snapshot, 'auto_bootstrap') ? snapshot.auto_bootstrap : payload.auto_bootstrap
+        };
+        const normalized = applyConfigSnapshot(mergedRaw, { persist: true });
+        resetClientStateForConfigChange();
+        await loadMetadata();
+        await loadData();
+        await fetchTablesForPath(normalized.db_path, { silent: true });
+        showToast('配置已应用。', 'success');
+      } catch (err) {
+        console.error('更新配置失败', err);
+        const message = err instanceof Error && err.message ? err.message : '配置保存失败，请稍后重试。';
+        showToast(message, 'error');
+      } finally {
+        restoreControls();
+      }
+    }
+
+    function getUniqueColumns() {
+      if (!state.meta || !state.meta.column_info) {
+        return [];
+      }
+      return Object.keys(state.meta.column_info).filter(key => {
+        if (key === 'id') {
+          return false;
+        }
+        const info = getColumnInfo(key);
+        if (!info) {
+          return false;
+        }
+        if (info.primary_key) {
+          return false;
+        }
+        return Boolean(info.unique);
+      });
+    }
+
+    function filterPendingUniqueColumns(uniqueColumns, currentPayload = {}) {
+      return uniqueColumns.filter(column => {
+        if (!Object.prototype.hasOwnProperty.call(currentPayload, column)) {
+          return true;
+        }
+        const value = currentPayload[column];
+        if (value === null || value === undefined) {
+          return true;
+        }
+        return String(value).trim() === '';
+      });
+    }
+
+    function buildUniqueDialog(columns, template) {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-backdrop';
+
+      const panel = document.createElement('div');
+      panel.className = 'modal-panel';
+
+      const title = document.createElement('h3');
+      title.textContent = '填写唯一字段';
+      panel.appendChild(title);
+
+      const intro = document.createElement('p');
+      intro.textContent = '以下字段要求唯一，请为新节点输入合适的值。留空将导致创建失败。';
+      panel.appendChild(intro);
+
+      const form = document.createElement('form');
+      form.noValidate = true;
+
+      columns.forEach(column => {
+        const info = getColumnInfo(column);
+        const label = document.createElement('label');
+
+        const caption = document.createElement('span');
+        const pieces = [`${column}（需唯一`];
+        if (info && info.notnull) {
+          pieces.push('必填');
+        }
+        caption.textContent = `${pieces.join('、')}）`;
+        label.appendChild(caption);
+
+        const input = document.createElement('input');
+        input.name = column;
+        input.autocomplete = 'off';
+        input.placeholder = '请输入...';
+        if (info && info.notnull) {
+          input.required = true;
+        }
+        if (isNumericColumn(column)) {
+          input.type = 'number';
+        }
+        if (isBooleanColumn(column)) {
+          input.type = 'text';
+          input.placeholder = '例如：1 / 0 / true / false';
+        }
+        label.appendChild(input);
+        const templateValue = template ? template[column] : undefined;
+        if (templateValue !== undefined && templateValue !== null) {
+          const hint = document.createElement('span');
+          hint.style.fontSize = '12px';
+          hint.style.color = 'var(--muted)';
+          hint.textContent = `参考现有值：${String(templateValue)}`;
+          label.appendChild(hint);
+        }
+        form.appendChild(label);
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'modal-actions';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.textContent = '取消';
+      actions.appendChild(cancelBtn);
+
+      const confirmBtn = document.createElement('button');
+      confirmBtn.type = 'submit';
+      confirmBtn.className = 'primary';
+      confirmBtn.textContent = '确定';
+      actions.appendChild(confirmBtn);
+
+      form.appendChild(actions);
+      panel.appendChild(form);
+      overlay.appendChild(panel);
+
+      return { overlay, form, cancelBtn, confirmBtn };
+    }
+
+    function requestUniqueOverrides(template, currentPayload = {}) {
+      const uniqueColumns = getUniqueColumns();
+      const pendingColumns = filterPendingUniqueColumns(uniqueColumns, currentPayload);
+      if (!pendingColumns.length) {
+        return Promise.resolve({});
+      }
+      return new Promise(resolve => {
+        const { overlay, form, cancelBtn } = buildUniqueDialog(pendingColumns, template);
+        const inputs = Array.from(form.querySelectorAll('input'));
+        const cleanup = () => {
+          if (overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+          }
+          document.removeEventListener('keydown', onKeyDown, true);
+        };
+
+        const resolveWith = value => {
+          cleanup();
+          resolve(value);
+        };
+
+        const onKeyDown = evt => {
+          if (evt.key === 'Escape') {
+            evt.preventDefault();
+            resolveWith(null);
+          }
+        };
+
+        cancelBtn.addEventListener('click', () => resolveWith(null));
+
+        form.addEventListener('submit', evt => {
+          evt.preventDefault();
+          if (!form.checkValidity()) {
+            const firstInvalid = inputs.find(input => !input.checkValidity());
+            if (firstInvalid) {
+              firstInvalid.reportValidity();
+              firstInvalid.focus();
+            }
+            return;
+          }
+          const fd = new FormData(form);
+          const overrides = {};
+          pendingColumns.forEach(column => {
+            const raw = fd.get(column);
+            overrides[column] = raw === null ? '' : raw;
+          });
+          resolveWith(overrides);
+        });
+
+        overlay.addEventListener('click', evt => {
+          if (evt.target === overlay) {
+            resolveWith(null);
+          }
+        });
+
+        document.addEventListener('keydown', onKeyDown, true);
+
+        document.body.appendChild(overlay);
+        if (inputs.length) {
+          setTimeout(() => inputs[0].focus(), 0);
+        }
+      });
+    }
+
+    function applyOverridesWithTypes(target, overrides, template) {
+      if (!overrides) {
+        return;
+      }
+      Object.entries(overrides).forEach(([key, value]) => {
+        const original = template ? template[key] : undefined;
+        target[key] = toSameType(value, original, key);
+      });
+    }
+
+    function getIdField() {
+      const field = state.config && state.config.id_field;
+      return field && String(field).trim() ? String(field) : 'id';
+    }
+
+    function getParentField() {
+      const field = state.config && state.config.parent_field;
+      return field && String(field).trim() ? String(field) : 'parent_id';
+    }
+
+    function getRowId(row) {
+      if (!row) {
+        return undefined;
+      }
+      return row[getIdField()];
+    }
+
+    function getRowParentId(row) {
+      if (!row) {
+        return undefined;
+      }
+      return row[getParentField()];
+    }
+
+    function getRowByIdKey(idKey) {
+      if (!state.data || !state.data.length) {
+        return null;
+      }
+      for (let index = 0; index < state.data.length; index += 1) {
+        const row = state.data[index];
+        if (toIdKey(getRowId(row)) === idKey) {
+          return row;
+        }
+      }
+      return null;
+    }
+
+    function getDirectChildrenCount(id) {
+      if (id === null || id === undefined) {
+        return 0;
+      }
+      const parentKey = toIdKey(id);
+      let count = 0;
+      for (let index = 0; index < state.data.length; index += 1) {
+        const row = state.data[index];
+        if (toIdKey(getRowParentId(row)) === parentKey) {
+          count += 1;
+        }
+      }
+      return count;
+    }
+
+    function scrollSelectedTreeNodeIntoView(options = {}) {
+      if (!dom.tree || state.selectedId === null || state.selectedId === undefined) {
+        return;
+      }
+      const selector = `.node-label[data-node-id="${escapeForSelector(toOptionValue(state.selectedId))}"]`;
+      const element = dom.tree.querySelector(selector);
+      if (!element) {
+        return;
+      }
+      const behavior = options.smooth ? 'smooth' : 'auto';
+      element.scrollIntoView({ block: 'center', inline: 'nearest', behavior });
+    }
+
+    function idsEqual(a, b) {
+      if (a === null || a === undefined) {
+        return b === null || b === undefined;
+      }
+      if (b === null || b === undefined) {
+        return false;
+      }
+      return String(a) === String(b);
+    }
+
+    function toIdKey(value) {
+      if (value === null || value === undefined) {
+        return '__NULL__';
+      }
+      return String(value);
+    }
+
+    function isCollapsedId(value) {
+      return state.collapsed.has(toIdKey(value));
+    }
+
+    function getSortOrderColumn() {
+      // 只检查实际的数据，不依赖元数据
+      if (state.data && state.data.length > 0) {
+        const firstRow = state.data[0];
+        const entries = Object.keys(firstRow);
+        for (const key of entries) {
+          if (key.toLowerCase() === 'sort_order') {
+            return key;
+          }
+        }
+      }
+      
+      return null;
+    }
+
+    function hasSortOrderColumn() {
+      return Boolean(getSortOrderColumn());
+    }
+
+    function normalizeParentValue(value) {
+      if (value === null || value === undefined || value === '') {
+        return null;
+      }
+      const num = Number(value);
+      if (Number.isNaN(num)) {
+        return String(value);
+      }
+      return num;
+    }
+
+    function computeNextSortOrderValue(parentId) {
+      const sortColumn = getSortOrderColumn();
+      if (!sortColumn) {
+        return null;
+      }
+      const normalizedParent = normalizeParentValue(parentId);
+      const siblings = state.data.filter(row => {
+        const rowParent = normalizeParentValue(getRowParentId(row));
+        return rowParent === normalizedParent;
+      });
+      if (!siblings.length) {
+        return 1;
+      }
+      let maxValue = -Infinity;
+      siblings.forEach(row => {
+        const raw = row[sortColumn];
+        const num = Number(raw);
+        if (!Number.isNaN(num)) {
+          if (num > maxValue) {
+            maxValue = num;
+          }
+        }
+      });
+      if (maxValue === -Infinity) {
+        return 1;
+      }
+      return maxValue + 1;
+    }
+
+    function applyAutoSortOrder(payload, template, parentId) {
+      const sortColumn = getSortOrderColumn();
+      if (!sortColumn) {
+        return;
+      }
+      const existingValue = payload[sortColumn];
+      if (existingValue !== undefined && existingValue !== null && String(existingValue).trim() !== '') {
+        return;
+      }
+      const nextValue = computeNextSortOrderValue(parentId);
+      if (nextValue === null || nextValue === undefined) {
+        return;
+      }
+      const templateValue = template ? template[sortColumn] : undefined;
+      payload[sortColumn] = toSameType(nextValue, templateValue, sortColumn);
+    }
+
+    function updateSortButtonVisibility() {
+      if (!dom.rebalanceSort) {
+        return;
+      }
+      
+      // 检查是否有sort_order列
+      const sortColumn = getSortOrderColumn();
+      const hasColumn = Boolean(sortColumn);
+      
+      // 调试日志
+      console.log('Sort column check:', { sortColumn, hasColumn, dataLength: state.data?.length });
+      
+      // 动态显示/隐藏按钮 - 严格条件
+      if (hasColumn && state.data && state.data.length > 0 && sortColumn) {
+        dom.rebalanceSort.style.display = '';  // 显示
+        dom.rebalanceSort.style.visibility = 'visible';
+        dom.rebalanceSort.disabled = !activeSessionId;
+      } else {
+        dom.rebalanceSort.style.display = 'none !important';  // 强制隐藏
+        dom.rebalanceSort.setAttribute('style', 'display: none !important;');  // 更强制的方式
+      }
+    }
+
+    function removeToast(element) {
+      if (!element) {
+        return;
+      }
+      const timerId = element.getAttribute('data-timer-id');
+      if (timerId) {
+        clearTimeout(Number(timerId));
+        element.removeAttribute('data-timer-id');
+      }
+      if (element.classList.contains('toast-hiding')) {
+        return;
+      }
+      element.classList.add('toast-hiding');
+      element.addEventListener('animationend', () => {
+        if (element.parentNode) {
+          element.parentNode.removeChild(element);
+        }
+      }, { once: true });
+    }
+
+    function showToast(message, type = 'info', options = {}) {
+      if (!dom.toastContainer || !message) {
+        return;
+      }
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+
+      const text = document.createElement('div');
+      text.textContent = message;
+      toast.appendChild(text);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.textContent = '关闭';
+      closeBtn.addEventListener('click', evt => {
+        evt.preventDefault();
+        removeToast(toast);
+      });
+      toast.appendChild(closeBtn);
+
+      dom.toastContainer.appendChild(toast);
+
+      const duration = Math.max(2000, Number(options.duration) || 3600);
+      const timerId = setTimeout(() => removeToast(toast), duration);
+      toast.setAttribute('data-timer-id', String(timerId));
+      const pauseTimer = () => {
+        const current = toast.getAttribute('data-timer-id');
+        if (current) {
+          clearTimeout(Number(current));
+          toast.removeAttribute('data-timer-id');
+        }
+      };
+      toast.addEventListener('mouseenter', pauseTimer);
+      toast.addEventListener('mouseleave', () => {
+        if (!toast.classList.contains('toast-hiding')) {
+          const followTimer = setTimeout(() => removeToast(toast), 1800);
+          toast.setAttribute('data-timer-id', String(followTimer));
+        }
+      });
+    }
+
+    function updateUndoButton() {
+      if (!dom.undo) {
+        return;
+      }
+      dom.undo.disabled = !activeSessionId || state.history.length === 0;
+    }
+
+    function pushHistory(entry) {
+      if (state.isUndoing) {
+        return;
+      }
+      state.history.push(entry);
+      if (state.history.length > 50) {
+        state.history.shift();
+      }
+      updateUndoButton();
+    }
+
+    function cloneRecord(record) {
+      return JSON.parse(JSON.stringify(record));
+    }
+
+    function collectNodesForDeletion(rootId) {
+      const descendantIds = getDescendantIds(rootId);
+      const targetIds = new Set([rootId, ...descendantIds].map(id => toIdKey(id)));
+      const nodes = state.data
+        .filter(row => targetIds.has(toIdKey(getRowId(row))))
+        .map(row => cloneRecord(row));
+      return sortNodesForRestore(nodes);
+    }
+
+    function sortNodesForRestore(nodes) {
+      const remaining = new Map(nodes.map(node => [toIdKey(getRowId(node)), node]));
+      const result = [];
+      const added = new Set();
+      let guard = 0;
+      const maxIterations = nodes.length * 2 + 5;
+      while (remaining.size && guard < maxIterations) {
+        guard += 1;
+        let progressed = false;
+        for (const [key, node] of Array.from(remaining.entries())) {
+          const id = getRowId(node);
+          const parentId = getRowParentId(node);
+          const parentKey = toIdKey(parentId);
+          if (
+            parentId === null ||
+            parentId === undefined ||
+            parentId === '' ||
+            !remaining.has(parentKey) ||
+            added.has(parentKey)
+          ) {
+            result.push(node);
+            added.add(key);
+            remaining.delete(key);
+            progressed = true;
+          }
+        }
+        if (!progressed) {
+          break;
+        }
+      }
+      if (remaining.size) {
+        remaining.forEach(node => result.push(node));
+      }
+      return result;
+    }
+
+    async function undoLastAction() {
+      if (!state.history.length) {
+        return;
+      }
+      if (!ensureSessionAvailable()) {
+        return;
+      }
+      const entry = state.history.pop();
+      updateUndoButton();
+      state.isUndoing = true;
+      let successMessage = '';
+      try {
+        if (entry.action === 'create') {
+          await undoCreate(entry);
+          successMessage = '已撤销新增操作。';
+        } else if (entry.action === 'update') {
+          await undoUpdate(entry);
+          successMessage = '已撤销编辑操作。';
+        } else if (entry.action === 'delete') {
+          await undoDelete(entry);
+          successMessage = '已撤销删除操作。';
+        } else {
+          state.history.push(entry);
+          return;
+        }
+      } catch (err) {
+        console.error('撤销失败', err);
+        const message = err instanceof Error && err.message ? err.message : '撤销失败，请稍后重试。';
+        showToast(message, 'error');
+        state.history.push(entry);
+        successMessage = '';
+      } finally {
+        state.isUndoing = false;
+        updateUndoButton();
+      }
+      if (successMessage) {
+        showToast(successMessage, 'success');
+      }
+    }
+
+    async function undoCreate(entry) {
+      const node = entry.node;
+      const nodeId = node ? getRowId(node) : null;
+      if (nodeId === undefined || nodeId === null) {
+        return;
+      }
+      const encodedId = encodeURIComponent(String(nodeId));
+      const resp = await fetch(withSession(`${API_ENDPOINT}/${encodedId}`), { method: 'DELETE' });
+      if (resp.status === 410) {
+        handleSessionExpired();
+        throw new Error('会话已过期');
+      }
+      if (!resp.ok) {
+        const message = await extractErrorMessage(resp, `撤销失败：${resp.status}`);
+        throw new Error(message);
+      }
+      state.selectedId = getRowParentId(node) ?? null;
+      await loadData({ preserveSelection: true });
+    }
+
+    async function undoUpdate(entry) {
+      const before = entry.before;
+      const beforeId = before ? getRowId(before) : null;
+      if (beforeId === undefined || beforeId === null) {
+        return;
+      }
+      const payload = {};
+      Object.keys(before).forEach(key => {
+        if (key === getIdField()) {
+          return;
+        }
+        payload[key] = before[key];
+      });
+      const encodedId = encodeURIComponent(String(beforeId));
+      const resp = await fetch(withSession(`${API_ENDPOINT}/${encodedId}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (resp.status === 410) {
+        handleSessionExpired();
+        throw new Error('会话已过期');
+      }
+      if (!resp.ok) {
+        const message = await extractErrorMessage(resp, `撤销失败：${resp.status}`);
+        throw new Error(message);
+      }
+      state.selectedId = beforeId;
+      await loadData({ preserveSelection: true });
+    }
+
+    async function undoDelete(entry) {
+      const nodes = entry.nodes;
+      if (!Array.isArray(nodes) || !nodes.length) {
+        return;
+      }
+      const resp = await fetch(withSession(RESTORE_ENDPOINT), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodes })
+      });
+      if (resp.status === 410) {
+        handleSessionExpired();
+        throw new Error('会话已过期');
+      }
+      if (!resp.ok) {
+        const message = await extractErrorMessage(resp, `撤销失败：${resp.status}`);
+        throw new Error(message);
+      }
+      const focusNode = entry.focusId !== undefined ? entry.focusId : getRowId(nodes[0]);
+      state.selectedId = focusNode ?? null;
+      await loadData({ preserveSelection: true });
+    }
+
+    async function rebuildSortOrder() {
+      if (!hasSortOrderColumn()) {
+        showToast('当前表没有 sort_order 列。', 'error');
+        return;
+      }
+      if (!dom.rebalanceSort) {
+        return;
+      }
+      if (!ensureSessionAvailable()) {
+        return;
+      }
+      const previousDisabled = dom.rebalanceSort.disabled;
+      dom.rebalanceSort.disabled = true;
+      try {
+        const resp = await fetch(withSession(SORT_REBUILD_ENDPOINT), { method: 'POST' });
+        if (resp.status === 410) {
+          handleSessionExpired();
+          return;
+        }
+        if (!resp.ok) {
+          const message = await extractErrorMessage(resp, `重排失败：${resp.status}`);
+          throw new Error(message);
+        }
+        const result = await resp.json();
+        const updated = result && typeof result.updated === 'number' ? result.updated : null;
+        await loadData({ preserveSelection: true });
+        const message = updated !== null
+          ? `已重排 ${updated} 条记录的排序。`
+          : '排序已重排。';
+        showToast(message, 'success');
+      } catch (err) {
+        console.error('重排排序失败', err);
+        const message = err instanceof Error && err.message ? err.message : '重排失败，请稍后重试。';
+        showToast(message, 'error');
+      } finally {
+        dom.rebalanceSort.disabled = previousDisabled;
+        updateSortButtonVisibility();
+      }
+    }
+
+    function isNumericColumn(key) {
+      const columnType = getColumnType(key);
+      return columnType && NUMERIC_TYPES.some(type => columnType.includes(type));
+    }
+
+    function isBooleanColumn(key) {
+      const columnType = getColumnType(key);
+      return columnType && BOOLEAN_TYPES.some(type => columnType === type);
+    }
+
+    function isForeignKeyColumn(key) {
+      return Boolean(state.meta && state.meta.foreign_keys && state.meta.foreign_keys[key]);
+    }
+
+    function toOptionValue(value) {
+      return value === null || value === undefined ? '' : String(value);
+    }
+
+    function isLikelyTextColumn(key) {
+      const columnType = getColumnType(key);
+      if (!columnType) {
+        return false;
+      }
+      return TEXTAREA_TYPES.some(type => columnType.includes(type));
+    }
+
+    function shouldUseTextareaField(key, value) {
+      if (key === getIdField() || key === getParentField()) {
+        return false;
+      }
+      if (isNumericColumn(key) || isBooleanColumn(key) || isForeignKeyColumn(key)) {
+        return false;
+      }
+      if (isLikelyTextColumn(key)) {
+        return true;
+      }
+      if (typeof value === 'string') {
+        if (value.length > 160) {
+          return true;
+        }
+        if (value.includes('\n')) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    const LAYOUT_MIN_WIDTH = 150;
+    const LAYOUT_MAX_WIDTH = 600;
+    
+    const dom = {
+      tree: document.getElementById('treeContainer'),
+      details: document.getElementById('detailsPane'),
+      detailsChip: document.getElementById('detailsActiveNode'),
+      jsonOutput: document.getElementById('jsonOutput'),
+      addRoot: document.getElementById('addRoot'),
+      undo: document.getElementById('undo'),
+      rebalanceSort: document.getElementById('rebalanceSort'),
+      toggleCollapse: document.getElementById('toggleCollapse'),
+      themePreference: document.getElementById('themePreference'),
+      copyJson: document.getElementById('copyJson'),
+      toastContainer: document.getElementById('toastContainer'),
+      treeSearch: document.getElementById('treeSearch'),
+      treeSearchClear: document.getElementById('clearTreeSearch'),
+      treeSearchPrev: document.getElementById('treeSearchPrev'),
+      treeSearchNext: document.getElementById('treeSearchNext'),
+      treeSearchInfo: document.getElementById('treeSearchInfo'),
+      searchResults: document.getElementById('searchResults'),
+      configForm: document.getElementById('configForm'),
+      configDbPath: document.getElementById('configDbPath'),
+      configTableName: document.getElementById('configTableName'),
+      configIdField: document.getElementById('configIdField'),
+      configParentField: document.getElementById('configParentField'),
+      configAutoBootstrap: document.getElementById('configAutoBootstrap'),
+      configApply: document.querySelector('#configForm button[type="submit"]'),
+      configRefresh: document.getElementById('configRefresh'),
+      configSessionWarning: document.getElementById('configSessionWarning'),
+      configFetchTables: document.getElementById('configFetchTables'),
+      configBrowseDb: document.getElementById('configBrowseDb'),
+      configTableSuggestions: document.getElementById('configTableSuggestions'),
+      resetLayout: document.getElementById('resetLayout'),
+      leftResizer: document.getElementById('leftResizer'),
+      rightResizer: document.getElementById('rightResizer'),
+      app: document.getElementById('app'),
+      controlPanelMode: document.getElementById('controlPanelMode'),
+      controlPanelSection: document.getElementById('controlPanelSection'),
+      configPanel: document.getElementById('configPanel'),
+      searchPanel: document.getElementById('searchPanel')
+    };
+
+    function withSession(url) {
+      if (!activeSessionId) {
+        return url;
+      }
+      const separator = url.includes('?') ? '&' : '?';
+      return `${url}${separator}session=${encodeURIComponent(activeSessionId)}`;
+    }
+
+    function ensureSessionAvailable() {
+      if (!activeSessionId) {
+        showToast('请先应用配置获取会话。', 'error');
+        return false;
+      }
+      return true;
+    }
+
+    function setActiveSession(sessionId) {
+      activeSessionId = sessionId || null;
+      if (!activeSessionId) {
+        clearOwnedSessionClaim();
+        detectExternalSessionClaim();
+      }
+      updateSessionDependentControls();
+    }
+
+    function syncActiveSessionClaim() {
+      if (activeSessionId && hasMeaningfulConfigData(state.config)) {
+        rememberOwnedSession(activeSessionId);
+      } else if (!activeSessionId) {
+        clearOwnedSessionClaim();
+      }
+    }
+
+    function updateSessionDependentControls() {
+      const missing = !activeSessionId;
+      if (dom.addRoot) {
+        dom.addRoot.disabled = missing;
+      }
+      if (dom.copyJson) {
+        dom.copyJson.disabled = missing;
+      }
+      updateUndoButton();
+      updateCollapseToggleButton();
+      updateSortButtonVisibility();
+      updateConfigApplyAvailability();
+    }
+
+    function updateConfigApplyAvailability(options = {}) {
+      if (!dom.configForm) {
+        return { blocked: false, conflicting: null };
+      }
+      const prospective = options.prospectiveConfig || getProspectiveConfigForBlocking();
+      const claims = options.claims || loadStoredSessionClaims();
+      const rawConflicting = Object.prototype.hasOwnProperty.call(options, 'conflictingClaim')
+        ? options.conflictingClaim
+        : resolveConflictingClaim({ prospectiveConfig: prospective, claims });
+      const conflicting = rawConflicting && rawConflicting.client_id !== CLIENT_ID
+        ? rawConflicting
+        : null;
+      const blocked = Boolean(conflicting);
+      state.sessionBlockedBy = conflicting;
+      if (dom.configApply) {
+        dom.configApply.disabled = blocked;
+      }
+      if (dom.configSessionWarning) {
+        if (blocked && conflicting) {
+          const info = conflicting || {};
+          const detailParts = [];
+          if (info.table_name) {
+            detailParts.push(`表：${info.table_name}`);
+          }
+          if (info.db_path) {
+            detailParts.push(`文件：${info.db_path}`);
+          }
+          const suffix = detailParts.length ? `（${detailParts.join('，')}）` : '';
+          dom.configSessionWarning.textContent = `当前数据源已在其他标签页使用${suffix}，请先关闭对应页面或释放会话。`;
+          dom.configSessionWarning.hidden = false;
+        } else {
+          dom.configSessionWarning.hidden = true;
+        }
+      }
+      return { blocked, conflicting };
+    }
+
+    async function releaseActiveSession(options = {}) {
+      if (!activeSessionId) {
+        return;
+      }
+      const { keepalive = false } = options;
+      const sessionIdToRelease = activeSessionId;
+      const url = `${SESSION_ENDPOINT}?session=${encodeURIComponent(sessionIdToRelease)}`;
+      setActiveSession(null);
+      try {
+        await fetch(url, { method: 'DELETE', keepalive });
+      } catch (err) {
+        if (!keepalive) {
+          console.warn('释放会话失败', err);
+        }
+      }
+    }
+
+    function handleSessionExpired() {
+      if (activeSessionId) {
+        showToast('会话已失效，请重新应用配置。', 'error');
+      }
+      setActiveSession(null);
+      resetClientStateForConfigChange();
+      renderAll();
+    }
+
+    function areAllNodesCollapsed() {
+      const total = state.data.length;
+      if (total === 0) {
+        return false;
+      }
+      return state.collapsed.size === total;
+    }
+
+    function updateCollapseToggleButton() {
+      if (!dom.toggleCollapse) {
+        return;
+      }
+      const allCollapsed = areAllNodesCollapsed();
+      // 只更新第一个span的文本，保留快捷键span
+      const textSpan = dom.toggleCollapse.querySelector('span:first-child');
+      if (textSpan) {
+        textSpan.textContent = allCollapsed ? '全部展开' : '全部折叠';
+      }
+    }
+
+    function closeNodeContextMenu() {
+      if (nodeContextMenuCleanup) {
+        nodeContextMenuCleanup();
+        nodeContextMenuCleanup = null;
+      }
+      if (nodeContextMenuElement && nodeContextMenuElement.parentNode) {
+        nodeContextMenuElement.parentNode.removeChild(nodeContextMenuElement);
+      }
+      nodeContextMenuElement = null;
+    }
+
+    function closeSearchResultContextMenu() {
+      if (searchResultContextMenuCleanup) {
+        searchResultContextMenuCleanup();
+        searchResultContextMenuCleanup = null;
+      }
+      if (searchResultContextMenuElement && searchResultContextMenuElement.parentNode) {
+        searchResultContextMenuElement.parentNode.removeChild(searchResultContextMenuElement);
+      }
+      searchResultContextMenuElement = null;
+    }
+
+    function expandNode(id, options = {}) {
+      if (id === null || id === undefined) {
+        return false;
+      }
+      const { silent = false } = options;
+      const key = toIdKey(id);
+      const changed = state.collapsed.delete(key);
+      if (changed && !silent) {
+        renderTree();
+      }
+      return changed;
+    }
+
+    function collapseNode(id, options = {}) {
+      if (id === null || id === undefined) {
+        return false;
+      }
+      const { silent = false } = options;
+      const key = toIdKey(id);
+      if (!state.collapsed.has(key)) {
+        state.collapsed.add(key);
+        if (!silent) {
+          renderTree();
+        }
+        return true;
+      }
+      return false;
+    }
+
+    function expandNodeRecursively(id) {
+      if (id === null || id === undefined) {
+        return;
+      }
+      const targets = [id, ...getDescendantIds(id)];
+      let changed = false;
+      targets.forEach(targetId => {
+        changed = expandNode(targetId, { silent: true }) || changed;
+      });
+      if (changed) {
+        renderTree();
+      }
+    }
+
+    function expandAncestorsForRow(row, options = {}) {
+      const { render = true } = options;
+      if (!row) {
+        return false;
+      }
+      let parentId = getRowParentId(row);
+      let changed = false;
+      const visited = new Set();
+      while (parentId !== null && parentId !== undefined) {
+        const parentKey = toIdKey(parentId);
+        if (visited.has(parentKey)) {
+          break;
+        }
+        visited.add(parentKey);
+        changed = expandNode(parentId, { silent: true }) || changed;
+        const parentRow = getRowByIdKey(parentKey);
+        if (!parentRow) {
+          break;
+        }
+        parentId = getRowParentId(parentRow);
+      }
+      if (changed && render) {
+        renderTree();
+      }
+      return changed;
+    }
+
+    function openNodeContextMenu(nodeId, event) {
+      event.preventDefault();
+      closeSearchResultContextMenu();
+      // 不再自动选中右键点击的节点，保持当前选中状态
+      // handleNodeSelection(nodeId);
+      closeNodeContextMenu();
+
+      const menu = document.createElement('div');
+      menu.className = 'node-context-menu';
+
+      const actions = [];
+      if (isCollapsedId(nodeId)) {
+        actions.push({ label: '展开此节点', handler: () => expandNode(nodeId) });
+      } else {
+        actions.push({ label: '折叠此节点', handler: () => collapseNode(nodeId) });
+      }
+      actions.push({ label: '展开所有子级', handler: () => expandNodeRecursively(nodeId) });
+
+      actions.forEach(action => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = action.label;
+        button.addEventListener('click', () => {
+          closeNodeContextMenu();
+          action.handler();
+        });
+        menu.appendChild(button);
+      });
+
+      document.body.appendChild(menu);
+
+      const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+      const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+      let docLeft = event.clientX + scrollX;
+      let docTop = event.clientY + scrollY;
+
+      menu.style.left = `${docLeft}px`;
+      menu.style.top = `${docTop}px`;
+
+      const adjustPosition = () => {
+        const rect = menu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        if (rect.right > viewportWidth) {
+          const overflowX = rect.right - viewportWidth + 8;
+          docLeft = Math.max(scrollX, docLeft - overflowX);
+        }
+        if (rect.bottom > viewportHeight) {
+          const overflowY = rect.bottom - viewportHeight + 8;
+          docTop = Math.max(scrollY, docTop - overflowY);
+        }
+        menu.style.left = `${docLeft}px`;
+        menu.style.top = `${docTop}px`;
+      };
+
+      requestAnimationFrame(adjustPosition);
+
+      const dismiss = evt => {
+        if (!menu.contains(evt.target)) {
+          closeNodeContextMenu();
+        }
+      };
+
+      const onKeyDown = evt => {
+        if (evt.key === 'Escape') {
+          evt.preventDefault();
+          closeNodeContextMenu();
+        }
+      };
+
+      const onScroll = () => closeNodeContextMenu();
+      const onResize = () => closeNodeContextMenu();
+
+      document.addEventListener('click', dismiss, true);
+      document.addEventListener('contextmenu', dismiss, true);
+      document.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('scroll', onScroll, true);
+      window.addEventListener('resize', onResize, true);
+
+      nodeContextMenuElement = menu;
+      nodeContextMenuCleanup = () => {
+        document.removeEventListener('click', dismiss, true);
+        document.removeEventListener('contextmenu', dismiss, true);
+        document.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('scroll', onScroll, true);
+        window.removeEventListener('resize', onResize, true);
+      };
+    }
+
+    function openSearchResultContextMenu(index, event) {
+      if (!state.search.active) {
+        return;
+      }
+      const matches = state.search.orderedMatches;
+      if (!matches || index < 0 || index >= matches.length) {
+        return;
+      }
+      event.preventDefault();
+      closeSearchResultContextMenu();
+      closeNodeContextMenu();
+
+      const menu = document.createElement('div');
+      menu.className = 'node-context-menu';
+
+      const locateButton = document.createElement('button');
+      locateButton.type = 'button';
+      locateButton.textContent = '定位到树节点';
+      locateButton.addEventListener('click', () => {
+        closeSearchResultContextMenu();
+        focusSearchResult(index, { scroll: true });
+      });
+      menu.appendChild(locateButton);
+
+      document.body.appendChild(menu);
+
+      const scrollX = window.pageXOffset || document.documentElement.scrollLeft || 0;
+      const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+      let docLeft = event.clientX + scrollX;
+      let docTop = event.clientY + scrollY;
+
+      menu.style.left = `${docLeft}px`;
+      menu.style.top = `${docTop}px`;
+
+      const adjustPosition = () => {
+        const rect = menu.getBoundingClientRect();
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+        if (rect.right > viewportWidth) {
+          const overflowX = rect.right - viewportWidth + 8;
+          docLeft = Math.max(scrollX, docLeft - overflowX);
+        }
+        if (rect.bottom > viewportHeight) {
+          const overflowY = rect.bottom - viewportHeight + 8;
+          docTop = Math.max(scrollY, docTop - overflowY);
+        }
+        menu.style.left = `${docLeft}px`;
+        menu.style.top = `${docTop}px`;
+      };
+
+      requestAnimationFrame(adjustPosition);
+
+      const dismiss = evt => {
+        if (!menu.contains(evt.target)) {
+          closeSearchResultContextMenu();
+        }
+      };
+
+      const onKeyDown = evt => {
+        if (evt.key === 'Escape') {
+          evt.preventDefault();
+          closeSearchResultContextMenu();
+        }
+      };
+
+      const onScroll = () => closeSearchResultContextMenu();
+      const onResize = () => closeSearchResultContextMenu();
+
+      document.addEventListener('click', dismiss, true);
+      document.addEventListener('contextmenu', dismiss, true);
+      document.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('scroll', onScroll, true);
+      window.addEventListener('resize', onResize, true);
+
+      searchResultContextMenuElement = menu;
+      searchResultContextMenuCleanup = () => {
+        document.removeEventListener('click', dismiss, true);
+        document.removeEventListener('contextmenu', dismiss, true);
+        document.removeEventListener('keydown', onKeyDown, true);
+        window.removeEventListener('scroll', onScroll, true);
+        window.removeEventListener('resize', onResize, true);
+      };
+    }
+
+    function escapeForSelector(value) {
+      if (window.CSS && typeof window.CSS.escape === 'function') {
+        return window.CSS.escape(value);
+      }
+      return String(value).replace(/[^a-zA-Z0-9_-]/g, match => `\\${match}`);
+    }
+
+    function updateActiveTreeSelection() {
+      const previous = dom.tree.querySelector('.node-label.active');
+      if (previous) {
+        previous.classList.remove('active');
+      }
+      if (state.selectedId === null || state.selectedId === undefined) {
+        return;
+      }
+      const targetSelector = `.node-label[data-node-id="${escapeForSelector(toOptionValue(state.selectedId))}"]`;
+      const target = dom.tree.querySelector(targetSelector);
+      if (target) {
+        target.classList.add('active');
+      }
+    }
+
+    function handleNodeSelection(nodeId) {
+      const changed = !idsEqual(nodeId, state.selectedId);
+      state.selectedId = nodeId;
+      if (changed) {
+        updateActiveTreeSelection();
+      }
+      renderDetails();
+      renderJsonPreview();
+      if (state.search.active) {
+        const key = nodeId === null || nodeId === undefined ? null : toIdKey(nodeId);
+        state.search.currentIndex = key && state.search.orderedMatches
+          ? state.search.orderedMatches.indexOf(key)
+          : -1;
+        updateTreeSearchUI();
+      }
+    }
+
+    async function extractErrorMessage(resp, defaultText) {
+      try {
+        const type = resp.headers.get('content-type') || '';
+        if (type.includes('application/json')) {
+          const json = await resp.json();
+          if (json && json.error) {
+            return String(json.error);
+          }
+        }
+        const text = await resp.text();
+        return text || defaultText;
+      } catch (err) {
+        console.warn('无法解析错误响应', err);
+        return defaultText;
+      }
+    }
+
+    function loadStoredLayoutWidths() {
+      try {
+        // 使用 sessionStorage 让每个标签页有独立的布局设置
+        const stored = sessionStorage.getItem(LAYOUT_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object') {
+            return {
+              left: parsed.left || 320,
+              right: parsed.right || 320
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('无法读取布局设置', err);
+      }
+      // 新标签页使用默认宽度
+      return { left: 320, right: 320 };
+    }
+    
+    function persistLayoutWidths(widths) {
+      try {
+        // 使用 sessionStorage 让每个标签页有独立的布局设置
+        sessionStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(widths));
+      } catch (err) {
+        console.warn('无法保存布局设置', err);
+      }
+    }
+    
+    function initLayoutResizers() {
+      if (!dom.leftResizer || !dom.rightResizer || !dom.app) {
+        return;
+      }
+      
+      // 恢复保存的宽度
+      const stored = loadStoredLayoutWidths();
+      dom.app.style.setProperty('--left-width', `${stored.left}px`);
+      dom.app.style.setProperty('--right-width', `${stored.right}px`);
+      
+      // 左侧分隔条
+      let leftDragging = false;
+      let leftStartX = 0;
+      let leftStartWidth = 0;
+      
+      dom.leftResizer.addEventListener('mousedown', e => {
+        leftDragging = true;
+        leftStartX = e.clientX;
+        const currentWidth = getComputedStyle(dom.app).getPropertyValue('--left-width');
+        leftStartWidth = parseInt(currentWidth) || 320;
+        dom.leftResizer.classList.add('dragging');
+        document.body.style.cursor = 'ew-resize';
+        e.preventDefault();
+      });
+      
+      // 右侧分隔条
+      let rightDragging = false;
+      let rightStartX = 0;
+      let rightStartWidth = 0;
+      
+      dom.rightResizer.addEventListener('mousedown', e => {
+        rightDragging = true;
+        rightStartX = e.clientX;
+        const currentWidth = getComputedStyle(dom.app).getPropertyValue('--right-width');
+        rightStartWidth = parseInt(currentWidth) || 320;
+        dom.rightResizer.classList.add('dragging');
+        document.body.style.cursor = 'ew-resize';
+        e.preventDefault();
+      });
+      
+      document.addEventListener('mousemove', e => {
+        if (leftDragging) {
+          const diff = e.clientX - leftStartX;
+          const newWidth = Math.min(Math.max(leftStartWidth + diff, LAYOUT_MIN_WIDTH), LAYOUT_MAX_WIDTH);
+          dom.app.style.setProperty('--left-width', `${newWidth}px`);
+        }
+        
+        if (rightDragging) {
+          const diff = rightStartX - e.clientX; // 注意方向相反
+          const newWidth = Math.min(Math.max(rightStartWidth + diff, LAYOUT_MIN_WIDTH), LAYOUT_MAX_WIDTH);
+          dom.app.style.setProperty('--right-width', `${newWidth}px`);
+        }
+      });
+      
+      document.addEventListener('mouseup', () => {
+        if (leftDragging || rightDragging) {
+          leftDragging = false;
+          rightDragging = false;
+          dom.leftResizer.classList.remove('dragging');
+          dom.rightResizer.classList.remove('dragging');
+          document.body.style.cursor = '';
+          
+          // 保存当前宽度
+          const leftWidth = parseInt(getComputedStyle(dom.app).getPropertyValue('--left-width')) || 320;
+          const rightWidth = parseInt(getComputedStyle(dom.app).getPropertyValue('--right-width')) || 320;
+          persistLayoutWidths({ left: leftWidth, right: rightWidth });
+        }
+      });
+      
+      // 重置布局按钮
+      if (dom.resetLayout) {
+        dom.resetLayout.addEventListener('click', () => {
+          // 重置为默认宽度
+          dom.app.style.setProperty('--left-width', '320px');
+          dom.app.style.setProperty('--right-width', '320px');
+          // 清除此标签页的布局设置，下次加载时会使用默认值
+          try {
+            sessionStorage.removeItem(LAYOUT_STORAGE_KEY);
+          } catch (err) {
+            console.warn('无法清除布局设置', err);
+          }
+          showToast('布局已重置为默认值', 'success');
+        });
+      }
+    }
+    
+    async function initMain() {
+      const fetchedConfig = await refreshConfigFromServer({ silent: true, reload: false });
+      const hasFetchedConfig = fetchedConfig && (
+        Boolean(fetchedConfig.db_path) ||
+        Boolean(fetchedConfig.table_name)
+      );
+      if (!hasFetchedConfig) {
+        const storedConfig = loadStoredConfigSnapshot();
+        if (storedConfig && (storedConfig.db_path || storedConfig.table_name)) {
+          applyConfigSnapshot(storedConfig, { persist: false });
+          if (storedConfig.db_path) {
+            fetchTablesForPath(storedConfig.db_path, { silent: true, toastOnSuccess: false }).catch(err => {
+              console.warn('预加载表列表失败', err);
+            });
+          }
+        }
+      }
+      await loadMetadata();
+      await loadData();
+      updateSortButtonVisibility();
+      syncConfigForm();
+    }
+
+    async function loadMetadata() {
+      if (!activeSessionId) {
+        return;
+      }
+      try {
+        const resp = await fetch(withSession(META_ENDPOINT));
+        if (!resp.ok) {
+          if (resp.status === 410) {
+            handleSessionExpired();
+            return;
+          }
+          throw new Error(`元数据加载失败：${resp.status}`);
+        }
+        const meta = await resp.json();
+        state.meta = {
+          columns: meta && meta.columns ? meta.columns : {},
+          foreign_keys: meta && meta.foreign_keys ? meta.foreign_keys : {},
+          column_info: meta && meta.column_info ? meta.column_info : {}
+        };
+        state.foreignOptions = {};
+        updateSortButtonVisibility();
+      } catch (err) {
+        console.warn('读取元数据失败，将继续使用默认设置。', err);
+        state.meta = { columns: {}, foreign_keys: {}, column_info: {} };
+        state.foreignOptions = {};
+        showToast('元数据加载失败，已使用默认配置。', 'error');
+        updateSortButtonVisibility();
+      }
+    }
+
+    async function loadData(options = {}) {
+      const preserveId = options.preserveSelection ? state.selectedId : null;
+      if (!activeSessionId) {
+        state.data = [];
+        renderAll();
+        return;
+      }
+      try {
+        const resp = await fetch(withSession(API_ENDPOINT));
+        if (!resp.ok) {
+          if (resp.status === 410) {
+            handleSessionExpired();
+            return;
+          }
+          throw new Error(`加载失败：${resp.status}`);
+        }
+        const rows = await resp.json();
+        state.data = Array.isArray(rows) ? rows : [];
+        applyTreeSearchTerm(state.search.raw, { silent: true, skipDomUpdate: true });
+        const hasPreserved = preserveId !== null && preserveId !== undefined
+          ? state.data.some(row => idsEqual(getRowId(row), preserveId))
+          : false;
+        if (hasPreserved) {
+          state.selectedId = preserveId;
+        } else if (!state.data.some(row => idsEqual(getRowId(row), state.selectedId))) {
+          state.selectedId = null;
+        }
+        if (state.search.active) {
+          const selectedKey = state.selectedId === null || state.selectedId === undefined
+            ? null
+            : toIdKey(state.selectedId);
+          state.search.currentIndex = selectedKey && state.search.orderedMatches
+            ? state.search.orderedMatches.indexOf(selectedKey)
+            : -1;
+          updateTreeSearchUI();
+        }
+        renderAll();
+        updateSortButtonVisibility();
+      } catch (err) {
+        console.error('读取数据库数据失败', err);
+        showToast('无法从服务器读取数据，请确认后端已启动。', 'error');
+      }
+    }
+
+    async function loadForeignOptions(column) {
+      if (!activeSessionId) {
+        return;
+      }
+      if (state.foreignOptions[column] === LOADING_SENTINEL) {
+        return;
+      }
+      state.foreignOptions[column] = LOADING_SENTINEL;
+      try {
+        const resp = await fetch(withSession(`${FOREIGN_ENDPOINT_BASE}${encodeURIComponent(column)}`));
+        if (!resp.ok) {
+          if (resp.status === 410) {
+            handleSessionExpired();
+            return;
+          }
+          throw new Error(`外键选项加载失败：${resp.status}`);
+        }
+        const rows = await resp.json();
+        state.foreignOptions[column] = Array.isArray(rows) ? rows : [];
+      } catch (err) {
+        console.error(`获取字段 ${column} 选项失败`, err);
+        state.foreignOptions[column] = [];
+        showToast(`字段 ${column} 的外键选项加载失败。`, 'error');
+      }
+      if (state.selectedId !== null) {
+        renderDetails();
+      }
+    }
+
+    function renderAll() {
+      renderTree();
+      renderDetails();
+      renderJsonPreview();
+    }
+
+    function buildForest(rawRows) {
+      const nodes = new Map();
+      const roots = [];
+      const orphans = [];
+
+      rawRows.forEach(row => {
+        const id = getRowId(row);
+        nodes.set(toIdKey(id), { data: row, children: [] });
+      });
+
+      nodes.forEach(node => {
+        const nodeId = getRowId(node.data);
+        const parentId = getRowParentId(node.data);
+        if (
+          parentId === null ||
+          parentId === undefined ||
+          parentId === '' ||
+          idsEqual(parentId, nodeId)
+        ) {
+          roots.push(node);
+          return;
+        }
+        const parent = nodes.get(toIdKey(parentId));
+        if (parent && parent !== node) {
+          parent.children.push(node);
+        } else {
+          orphans.push(node);
+        }
+      });
+
+      return { roots, orphans };
+    }
+
+    function renderTree() {
+      closeNodeContextMenu();
+      dom.tree.innerHTML = '';
+      const { roots, orphans } = buildForest(state.data);
+
+      const treeRoot = document.createElement('ul');
+      roots.forEach(node => {
+        const rendered = renderTreeNode(node);
+        if (rendered) {
+          treeRoot.appendChild(rendered);
+        }
+      });
+      dom.tree.appendChild(treeRoot);
+
+      if (orphans.length) {
+        const orphanSection = document.createElement('div');
+        orphanSection.innerHTML = '<h3>未找到上级的行</h3>';
+        const orphanList = document.createElement('ul');
+        orphans.forEach(node => {
+          const rendered = renderTreeNode(node);
+          if (rendered) {
+            orphanList.appendChild(rendered);
+          }
+        });
+        orphanSection.appendChild(orphanList);
+        dom.tree.appendChild(orphanSection);
+      }
+
+      updateActiveTreeSelection();
+      updateCollapseToggleButton();
+    }
+
+    function renderTreeNode(node) {
+      const nodeId = getRowId(node.data);
+      const parentId = getRowParentId(node.data);
+      const nodeKey = toIdKey(nodeId);
+      const searchActive = state.search.active;
+      const li = document.createElement('li');
+      const label = document.createElement('div');
+      label.className = 'node-label';
+      label.dataset.nodeId = toOptionValue(nodeId);
+      if (idsEqual(nodeId, state.selectedId)) {
+        label.classList.add('active');
+      }
+
+      const toggle = document.createElement('button');
+      const collapsed = isCollapsedId(nodeId);
+      toggle.textContent = collapsed ? '+' : '-';
+      toggle.disabled = false;
+      toggle.title = '展开 / 折叠';
+      toggle.addEventListener('click', evt => {
+        evt.stopPropagation();
+        toggleCollapse(nodeId);
+      });
+      label.appendChild(toggle);
+
+      const title = document.createElement('span');
+      title.textContent = deriveLabel(node.data);
+      label.appendChild(title);
+
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = `${getIdField()}=${nodeId ?? '无'} · ${getParentField()}=${parentId ?? '无'}`;
+    label.appendChild(meta);
+
+    const childCount = document.createElement('span');
+    childCount.className = 'child-count';
+    const directChildren = node.children.length;
+    childCount.textContent = ` · child=${directChildren}`;
+    label.appendChild(childCount);
+
+      if (searchActive && state.search.matched.has(nodeKey)) {
+        label.classList.add('search-match');
+      }
+
+      label.addEventListener('click', () => handleNodeSelection(nodeId));
+  label.addEventListener('contextmenu', event => openNodeContextMenu(nodeId, event));
+
+      li.appendChild(label);
+
+      if (!collapsed && node.children.length) {
+        const renderedIds = new Set();
+        const ul = document.createElement('ul');
+        node.children
+          .sort((a, b) => String(getRowId(a.data)).localeCompare(String(getRowId(b.data))))
+          .forEach(child => {
+            const childId = getRowId(child.data);
+            if (renderedIds.has(toIdKey(childId))) {
+              return;
+            }
+            renderedIds.add(toIdKey(childId));
+            const renderedChild = renderTreeNode(child);
+            if (renderedChild) {
+              ul.appendChild(renderedChild);
+            }
+          });
+        if (ul.children.length) {
+          li.appendChild(ul);
+        }
+      }
+
+      return li;
+    }
+
+    function deriveLabel(record) {
+      const idField = getIdField();
+      const parentField = getParentField();
+      const keys = Object.keys(record).filter(k => k !== idField && k !== parentField);
+      const nameKey = keys.find(k => k.toLowerCase() === 'name');
+      if (nameKey) {
+        const raw = record[nameKey];
+        if (raw === null || raw === undefined) {
+          return '';
+        }
+        const text = String(raw).trim();
+        return text;
+      }
+      if (!keys.length) {
+        return `节点 ${getRowId(record)}`;
+      }
+      const firstKey = keys[0];
+      const raw = record[firstKey];
+      if (raw === null || raw === undefined) {
+        return `节点 ${getRowId(record)}`;
+      }
+      return String(raw);
+    }
+
+    function toggleCollapse(id) {
+      if (isCollapsedId(id)) {
+        expandNode(id);
+      } else {
+        collapseNode(id);
+      }
+    }
+
+    function renderDetails() {
+      dom.details.innerHTML = '';
+      const record = state.data.find(row => idsEqual(getRowId(row), state.selectedId));
+      if (!record) {
+        dom.details.textContent = '选择左侧节点以编辑内容。';
+        if (dom.detailsChip) {
+          dom.detailsChip.hidden = true;
+          dom.detailsChip.textContent = '';
+        }
+        return;
+      }
+
+      const recordId = getRowId(record);
+      const parentField = getParentField();
+      const idField = getIdField();
+      const fragment = document.createDocumentFragment();
+
+      if (dom.detailsChip) {
+        dom.detailsChip.textContent = `正在编辑节点 ${recordId}`;
+        dom.detailsChip.hidden = false;
+      }
+
+      const form = document.createElement('form');
+      form.dataset.recordId = toOptionValue(recordId);
+
+      const foreignMap = state.meta && state.meta.foreign_keys ? state.meta.foreign_keys : {};
+
+      Object.keys(record).forEach(key => {
+        const label = document.createElement('label');
+        const fieldId = makeFieldId(key);
+        label.htmlFor = fieldId;
+
+        const titleRow = document.createElement('div');
+        titleRow.className = 'details-field-meta';
+        const fieldName = document.createElement('span');
+        fieldName.textContent = key;
+        titleRow.appendChild(fieldName);
+
+        if (key === idField) {
+          const badge = document.createElement('span');
+          badge.textContent = '主键';
+          badge.className = 'details-field-primary-badge';
+          titleRow.appendChild(badge);
+        }
+
+    label.appendChild(titleRow);
+    const fieldValue = record[key];
+
+        if (key === parentField) {
+          const select = document.createElement('select');
+          select.id = fieldId;
+          select.name = key;
+          select.classList.add('details-foreign-select');
+
+          const emptyOption = document.createElement('option');
+          emptyOption.value = '';
+          emptyOption.textContent = '无（设为根节点）';
+          select.appendChild(emptyOption);
+
+          const blockedIds = new Set(getDescendantIds(recordId).map(id => toIdKey(id)));
+          blockedIds.add(toIdKey(recordId));
+
+          state.data
+            .filter(row => !blockedIds.has(toIdKey(getRowId(row))))
+            .sort((a, b) => String(getRowId(a)).localeCompare(String(getRowId(b))))
+            .forEach(row => {
+              const option = document.createElement('option');
+              const optionId = getRowId(row);
+              option.value = toOptionValue(optionId);
+              const labelText = deriveLabel(row);
+              option.textContent = labelText ? `${optionId} - ${labelText}` : `${optionId}`;
+              if (idsEqual(optionId, getRowParentId(record))) {
+                option.selected = true;
+              }
+              select.appendChild(option);
+            });
+
+          select.value = toOptionValue(getRowParentId(record));
+          label.appendChild(select);
+        } else if (foreignMap[key]) {
+          const select = document.createElement('select');
+          select.id = fieldId;
+          select.name = key;
+          select.classList.add('details-foreign-select');
+          const options = state.foreignOptions[key];
+          const currentValue = toOptionValue(record[key]);
+
+          if (options === undefined) {
+            select.disabled = true;
+            const loadingOption = document.createElement('option');
+            loadingOption.value = '';
+            loadingOption.textContent = '加载中...';
+            select.appendChild(loadingOption);
+            loadForeignOptions(key);
+          } else if (options === LOADING_SENTINEL) {
+            select.disabled = true;
+            const loadingOption = document.createElement('option');
+            loadingOption.value = '';
+            loadingOption.textContent = '加载中...';
+            select.appendChild(loadingOption);
+          } else {
+            select.disabled = false;
+            const emptyOption = document.createElement('option');
+            emptyOption.value = '';
+            emptyOption.textContent = '未选择';
+            select.appendChild(emptyOption);
+
+            const seenValues = new Set();
+            options.forEach(opt => {
+              const option = document.createElement('option');
+              const optionValue = toOptionValue(opt.value);
+              option.value = optionValue;
+              option.textContent = (opt.label !== null && opt.label !== undefined && String(opt.label).trim() !== '')
+                ? String(opt.label)
+                : optionValue;
+              if (optionValue === currentValue) {
+                option.selected = true;
+              }
+              seenValues.add(optionValue);
+              select.appendChild(option);
+            });
+
+            if (currentValue && !seenValues.has(currentValue)) {
+              const placeholder = document.createElement('option');
+              placeholder.value = currentValue;
+              placeholder.textContent = `(当前) ${currentValue}`;
+              placeholder.selected = true;
+              select.appendChild(placeholder);
+            }
+
+            select.value = currentValue;
+          }
+
+          label.appendChild(select);
+        } else {
+          if (shouldUseTextareaField(key, fieldValue)) {
+            const textarea = document.createElement('textarea');
+            textarea.id = fieldId;
+            textarea.name = key;
+            textarea.rows = 3;
+            textarea.wrap = 'soft';
+            textarea.value = fieldValue === null || fieldValue === undefined ? '' : String(fieldValue);
+            label.appendChild(textarea);
+          } else {
+            const input = document.createElement('input');
+            input.id = fieldId;
+            input.name = key;
+            input.value = fieldValue ?? '';
+            if (isNumericColumn(key)) {
+              input.type = 'number';
+            }
+            if (key === idField) {
+              input.readOnly = true;
+              input.title = '主键通常不建议在前端修改';
+            }
+            label.appendChild(input);
+          }
+        }
+
+        form.appendChild(label);
+      });
+
+      const buttonsRow = document.createElement('div');
+      buttonsRow.className = 'form-actions';
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'submit';
+      saveBtn.className = 'primary';
+      saveBtn.textContent = '保存修改';
+      buttonsRow.appendChild(saveBtn);
+
+      const addChildBtn = document.createElement('button');
+      addChildBtn.type = 'button';
+      addChildBtn.textContent = '添加子节点';
+      addChildBtn.addEventListener('click', () => addChild(recordId));
+      buttonsRow.appendChild(addChildBtn);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'danger';
+      deleteBtn.textContent = '删除该节点';
+      deleteBtn.addEventListener('click', () => deleteNode(recordId));
+      buttonsRow.appendChild(deleteBtn);
+
+      form.appendChild(buttonsRow);
+
+      form.addEventListener('submit', handleSubmit);
+
+      fragment.appendChild(form);
+
+      dom.details.appendChild(fragment);
+
+    }
+
+    function getDescendantIds(id) {
+      const descendantValues = [];
+      const descendantKeys = new Set();
+      const { roots } = buildForest(state.data);
+      const lookup = new Map();
+      const visit = node => {
+        const nodeId = getRowId(node.data);
+        lookup.set(toIdKey(nodeId), node);
+        node.children.forEach(visit);
+      };
+      roots.forEach(visit);
+      const queue = [id];
+      while (queue.length) {
+        const current = queue.shift();
+        const node = lookup.get(toIdKey(current));
+        if (!node) {
+          continue;
+        }
+        node.children.forEach(child => {
+          const childId = getRowId(child.data);
+          const childKey = toIdKey(childId);
+          if (!descendantKeys.has(childKey)) {
+            descendantKeys.add(childKey);
+            descendantValues.push(childId);
+            queue.push(childId);
+          }
+        });
+      }
+      return descendantValues;
+    }
+
+    async function handleSubmit(event) {
+      event.preventDefault();
+      const form = event.target;
+      const recordId = form.dataset.recordId;
+      const record = state.data.find(row => idsEqual(getRowId(row), recordId));
+      if (!record) {
+        return;
+      }
+      if (!ensureSessionAvailable()) {
+        return;
+      }
+
+      const formData = new FormData(form);
+      const payload = {};
+      const beforeRecord = cloneRecord(record);
+      const idField = getIdField();
+
+      Object.keys(record).forEach(key => {
+        if (key === idField) {
+          return;
+        }
+        const raw = formData.get(key);
+        payload[key] = toSameType(raw, record[key], key);
+      });
+
+      try {
+        const recordKey = getRowId(record);
+        const encodedId = encodeURIComponent(String(recordKey));
+        const resp = await fetch(withSession(`${API_ENDPOINT}/${encodedId}`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (resp.status === 410) {
+          handleSessionExpired();
+          return;
+        }
+        if (!resp.ok) {
+          const message = await extractErrorMessage(resp, `更新失败：${resp.status}`);
+          throw new Error(message);
+        }
+        const updated = await resp.json();
+        pushHistory({ action: 'update', before: beforeRecord, after: cloneRecord(updated) });
+        await loadData({ preserveSelection: true });
+        showToast('保存成功。', 'success');
+      } catch (err) {
+        console.error('保存失败', err);
+        const message = err instanceof Error && err.message ? err.message : '保存失败，请稍后重试。';
+        showToast(message, 'error');
+      }
+    }
+
+    function toSameType(raw, original, key) {
+      const treatedAsForeign = key === getParentField() || isForeignKeyColumn(key);
+      const numericByMeta = isNumericColumn(key);
+      const booleanByMeta = isBooleanColumn(key);
+      const treatAsNumeric = numericByMeta || (!numericByMeta && typeof original === 'number');
+      const treatAsBoolean = booleanByMeta || (!booleanByMeta && typeof original === 'boolean');
+
+      if (raw === '' || raw === undefined || raw === null) {
+        if (treatedAsForeign || treatAsNumeric) {
+          return null;
+        }
+        if (treatAsBoolean) {
+          return false;
+        }
+        return '';
+      }
+
+      if (treatAsBoolean) {
+        if (typeof raw === 'boolean') {
+          return raw;
+        }
+        const lowered = String(raw).trim().toLowerCase();
+        if (['true', '1', 'yes', 'y'].includes(lowered)) {
+          return true;
+        }
+        if (['false', '0', 'no', 'n'].includes(lowered)) {
+          return false;
+        }
+        return Boolean(raw);
+      }
+
+      if (treatAsNumeric) {
+        const num = Number(raw);
+        if (Number.isNaN(num)) {
+          return original ?? null;
+        }
+        return num;
+      }
+
+      if ((original === null || original === undefined) && (raw === 'true' || raw === 'false')) {
+        return raw === 'true';
+      }
+
+      return raw;
+    }
+
+    function hasDefaultValue(info) {
+      if (!info || typeof info !== 'object') {
+        return false;
+      }
+      const value = info.default_value;
+      if (value === null || value === undefined) {
+        return false;
+      }
+      if (typeof value === 'string' && value.trim().toUpperCase() === 'NULL') {
+        return false;
+      }
+      return true;
+    }
+
+    function buildBlankRecord(template, overrides = {}) {
+      const base = { ...overrides };
+      let source = template;
+      if (!source && state.data.length) {
+        source = state.data[0];
+      }
+      const knownKeys = source
+        ? Object.keys(source)
+        : Object.keys(state.meta.columns || {});
+      const idField = getIdField();
+      const parentField = getParentField();
+
+      knownKeys.forEach(key => {
+        if (key === idField) {
+          return;
+        }
+        if (Object.prototype.hasOwnProperty.call(base, key)) {
+          return;
+        }
+        const info = getColumnInfo(key);
+        const required = Boolean(info && info.notnull);
+        const hasDefault = info ? hasDefaultValue(info) : false;
+        const isPrimary = Boolean(info && info.primary_key);
+        const isUnique = Boolean(info && info.unique);
+        const isSortOrder = key.toLowerCase() === 'sort_order';
+        if (isPrimary) {
+          return;
+        }
+        if (isUnique) {
+          return;
+        }
+        if (isSortOrder) {
+          return;
+        }
+        const isForeign = key === parentField || isForeignKeyColumn(key);
+        const templateValue = source ? source[key] : undefined;
+
+        if (isForeign) {
+          if (required && !hasDefault) {
+            base[key] = templateValue ?? null;
+          }
+          return;
+        }
+
+        if (required && !hasDefault) {
+          if (templateValue !== undefined && templateValue !== null) {
+            base[key] = templateValue;
+            return;
+          }
+          if (isNumericColumn(key)) {
+            base[key] = 0;
+            return;
+          }
+          if (isBooleanColumn(key)) {
+            base[key] = false;
+            return;
+          }
+          base[key] = '';
+        }
+      });
+
+      return base;
+    }
+
+    async function addRootNode() {
+      if (!ensureSessionAvailable()) {
+        return;
+      }
+      const template = state.data[0];
+      const parentField = getParentField();
+      const payload = buildBlankRecord(template, { [parentField]: null });
+      applyAutoSortOrder(payload, template, null);
+      const uniqueOverrides = await requestUniqueOverrides(template, payload);
+      if (uniqueOverrides === null) {
+        showToast('已取消新增根节点。', 'info');
+        return;
+      }
+      applyOverridesWithTypes(payload, uniqueOverrides, template);
+      try {
+        const resp = await fetch(withSession(API_ENDPOINT), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (resp.status === 410) {
+          handleSessionExpired();
+          return;
+        }
+        if (!resp.ok) {
+          const message = await extractErrorMessage(resp, `新增失败：${resp.status}`);
+          throw new Error(message);
+        }
+        const created = await resp.json();
+        state.selectedId = getRowId(created);
+        pushHistory({ action: 'create', node: cloneRecord(created) });
+        await loadData({ preserveSelection: true });
+        showToast('已添加根节点。', 'success');
+      } catch (err) {
+        console.error('添加根节点失败', err);
+        const message = err instanceof Error && err.message ? err.message : '添加根节点失败，请稍后重试。';
+        showToast(message, 'error');
+      }
+    }
+
+    async function addChild(parentId) {
+      if (!ensureSessionAvailable()) {
+        return;
+      }
+      const template = state.data.find(row => idsEqual(getRowId(row), parentId)) || state.data[0];
+      if (!template) {
+        showToast('当前没有可用模板来创建子节点。', 'error');
+        return;
+      }
+      const parentField = getParentField();
+      const payload = buildBlankRecord(template, { [parentField]: parentId });
+      applyAutoSortOrder(payload, template, parentId);
+      const uniqueOverrides = await requestUniqueOverrides(template, payload);
+      if (uniqueOverrides === null) {
+        showToast('已取消新增子节点。', 'info');
+        return;
+      }
+      applyOverridesWithTypes(payload, uniqueOverrides, template);
+      try {
+        const resp = await fetch(withSession(API_ENDPOINT), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (resp.status === 410) {
+          handleSessionExpired();
+          return;
+        }
+        if (!resp.ok) {
+          const message = await extractErrorMessage(resp, `新增失败：${resp.status}`);
+          throw new Error(message);
+        }
+        const created = await resp.json();
+        state.selectedId = getRowId(created);
+        state.collapsed.delete(toIdKey(parentId));
+        pushHistory({ action: 'create', node: cloneRecord(created) });
+        await loadData({ preserveSelection: true });
+        showToast('已添加子节点。', 'success');
+      } catch (err) {
+        console.error('添加子节点失败', err);
+        const message = err instanceof Error && err.message ? err.message : '添加子节点失败，请稍后重试。';
+        showToast(message, 'error');
+      }
+    }
+
+    async function deleteNode(id) {
+      if (!confirm('确认连同子节点一起删除吗？')) {
+        return;
+      }
+      if (!ensureSessionAvailable()) {
+        return;
+      }
+      const deletedNodes = collectNodesForDeletion(id);
+      if (!deletedNodes.length) {
+        showToast('未找到要删除的节点。', 'error');
+        return;
+      }
+      const rootNode = deletedNodes.find(node => idsEqual(getRowId(node), id)) || deletedNodes[0];
+      const parentFocusId = rootNode ? getRowParentId(rootNode) : null;
+      try {
+        const encodedId = encodeURIComponent(String(id));
+        const resp = await fetch(withSession(`${API_ENDPOINT}/${encodedId}`), { method: 'DELETE' });
+        if (resp.status === 410) {
+          handleSessionExpired();
+          return;
+        }
+        if (!resp.ok) {
+          const message = await extractErrorMessage(resp, `删除失败：${resp.status}`);
+          throw new Error(message);
+        }
+        if (idsEqual(state.selectedId, id)) {
+          state.selectedId = parentFocusId ?? null;
+        }
+        pushHistory({ action: 'delete', nodes: deletedNodes, focusId: rootNode ? getRowId(rootNode) : id });
+        state.selectedId = parentFocusId ?? null;
+        await loadData({ preserveSelection: true });
+        showToast('删除成功。', 'success');
+      } catch (err) {
+        console.error('删除失败', err);
+        const message = err instanceof Error && err.message ? err.message : '删除失败，请稍后重试。';
+        showToast(message, 'error');
+      }
+    }
+
+    function renderJsonPreview() {
+      dom.jsonOutput.value = JSON.stringify(state.data, null, 2);
+    }
+
+    updateUndoButton();
+
+    if (dom.configForm) {
+      dom.configForm.addEventListener('submit', evt => {
+        evt.preventDefault();
+        submitConfigUpdate().catch(err => {
+          console.error('配置提交过程中出现未捕获异常', err);
+        });
+      });
+      dom.configForm.addEventListener('input', () => {
+        updateConfigApplyAvailability();
+      });
+      dom.configForm.addEventListener('change', () => {
+        updateConfigApplyAvailability();
+      });
+    }
+
+    if (dom.configRefresh) {
+      dom.configRefresh.addEventListener('click', () => {
+        refreshConfigFromServer({ silent: false, reload: true, showToastOnSuccess: true }).catch(err => {
+          console.error('刷新配置失败', err);
+        });
+      });
+    }
+
+    if (dom.configBrowseDb) {
+      dom.configBrowseDb.addEventListener('click', () => {
+        openDatabasePicker().catch(err => {
+          console.error('打开数据库选择器失败', err);
+          showToast('打开文件浏览器失败，请稍后重试。', 'error');
+        });
+      });
+    }
+
+    if (dom.configFetchTables) {
+      dom.configFetchTables.addEventListener('click', async () => {
+        const pathValue = dom.configDbPath ? dom.configDbPath.value.trim() : '';
+        if (!pathValue) {
+          showToast('请先填写或选择数据库文件路径。', 'info');
+          return;
+        }
+        try {
+          const tables = await fetchTablesForPath(pathValue, { silent: false, toastOnSuccess: true });
+          if (Array.isArray(tables) && tables.length) {
+            openTablePicker(tables, { dbPath: pathValue });
+          } else {
+            showToast('未找到可用的数据表。', 'info');
+          }
+        } catch (err) {
+          console.error('获取表列表失败', err);
+        }
+      });
+    }
+
+    if (dom.controlPanelMode) {
+      dom.controlPanelMode.addEventListener('change', event => {
+        const value = event.target.value;
+        switchControlPanel(value, { focusSearch: value === 'search', persist: true });
+      });
+    }
+
+    if (dom.configDbPath) {
+      dom.configDbPath.addEventListener('blur', () => {
+        const value = dom.configDbPath.value ? dom.configDbPath.value.trim() : '';
+        if (!value) {
+          state.availableTables = [];
+          updateTableSuggestions([]);
+          return;
+        }
+        fetchTablesForPath(value, { silent: true, toastOnSuccess: false }).catch(err => {
+          console.error('自动获取表列表失败', err);
+        });
+      });
+    }
+
+    if (dom.treeSearch) {
+      dom.treeSearch.addEventListener('input', event => {
+        applyTreeSearchTerm(event.target.value || '');
+      });
+      dom.treeSearch.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+          if (state.search.active && state.search.orderedMatches && state.search.orderedMatches.length) {
+            event.preventDefault();
+            navigateSearch(event.shiftKey ? -1 : 1);
+          }
+        }
+      });
+    }
+
+    if (dom.treeSearchClear) {
+      dom.treeSearchClear.addEventListener('click', () => {
+        applyTreeSearchTerm('');
+        if (dom.treeSearch) {
+          dom.treeSearch.focus();
+        }
+      });
+    }
+
+    if (dom.treeSearchPrev) {
+      dom.treeSearchPrev.addEventListener('click', () => navigateSearch(-1));
+    }
+
+    if (dom.treeSearchNext) {
+      dom.treeSearchNext.addEventListener('click', () => navigateSearch(1));
+    }
+
+    window.addEventListener('beforeunload', () => {
+      if (activeSessionId) {
+        releaseActiveSession({ keepalive: true });
+      }
+    });
+
+    dom.addRoot.addEventListener('click', addRootNode);
+    if (dom.undo) {
+      dom.undo.addEventListener('click', () => {
+        undoLastAction().catch(err => {
+          console.error('撤销失败', err);
+        });
+      });
+    }
+    if (dom.rebalanceSort) {
+      dom.rebalanceSort.addEventListener('click', () => {
+        rebuildSortOrder().catch(err => {
+          console.error('重排排序失败', err);
+        });
+      });
+    }
+    if (dom.toggleCollapse) {
+      dom.toggleCollapse.addEventListener('click', () => {
+        if (areAllNodesCollapsed()) {
+          state.collapsed.clear();
+        } else {
+          state.collapsed = new Set(state.data.map(row => toIdKey(getRowId(row))));
+        }
+        renderTree();
+      });
+    }
+    // 主题控制初始化
+    if (dom.themePreference) {
+      dom.themePreference.value = currentThemePreference;
+      dom.themePreference.addEventListener('change', event => {
+        const selected = event.target.value;
+        const normalized = selected === 'light' || selected === 'dark' ? selected : 'system';
+        persistThemePreference(normalized);
+        applyThemePreference(normalized);
+      });
+    }
+    dom.copyJson.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(state.data, null, 2));
+        showToast('JSON 已复制到剪贴板。', 'success');
+      } catch (err) {
+        showToast('复制失败，请手动复制。', 'error');
+      }
+    });
+
+  const startupPanel = loadStoredControlPanelMode() || 'config';
+    switchControlPanel(startupPanel, { focusSearch: startupPanel === 'search' });
+
+    // 初始化菜单下拉功能
+    function initMenuDropdowns() {
+      const dropdowns = document.querySelectorAll('.menu-dropdown');
+      
+      dropdowns.forEach(dropdown => {
+        const trigger = dropdown.querySelector('button:first-child');
+        
+        if (!trigger) return;
+        
+        trigger.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const wasActive = dropdown.classList.contains('active');
+          
+          // 关闭所有菜单
+          document.querySelectorAll('.menu-dropdown').forEach(d => {
+            d.classList.remove('active');
+          });
+          
+          // 如果之前不是激活状态，则激活当前菜单
+          if (!wasActive) {
+            dropdown.classList.add('active');
+          }
+        });
+      });
+      
+      // 点击其他地方关闭菜单
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.menu-dropdown')) {
+          document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+            dropdown.classList.remove('active');
+          });
+        }
+      });
+      
+      // 点击菜单项后关闭菜单
+      document.querySelectorAll('.menu-dropdown-content button').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setTimeout(() => {
+            document.querySelectorAll('.menu-dropdown').forEach(dropdown => {
+              dropdown.classList.remove('active');
+            });
+          }, 100);
+        });
+      });
+    }
+
+    // 初始化键盘快捷键
+    function initKeyboardShortcuts() {
+      document.addEventListener('keydown', (e) => {
+        // Ctrl+N: 添加根节点
+        if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'n') {
+          e.preventDefault();
+          if (dom.addRoot && !dom.addRoot.disabled) {
+            dom.addRoot.click();
+          }
+        }
+        
+        // Ctrl+Z: 撤销
+        if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'z') {
+          e.preventDefault();
+          if (dom.undo && !dom.undo.disabled) {
+            dom.undo.click();
+          }
+        }
+        
+        // Ctrl+Shift+R: 重排排序
+        if (e.ctrlKey && e.shiftKey && !e.altKey && e.key === 'R') {
+          e.preventDefault();
+          if (dom.rebalanceSort && !dom.rebalanceSort.disabled && dom.rebalanceSort.style.display !== 'none') {
+            dom.rebalanceSort.click();
+          }
+        }
+        
+        // Ctrl+Shift+C: 全部折叠/展开
+        if (e.ctrlKey && e.shiftKey && !e.altKey && e.key === 'C') {
+          e.preventDefault();
+          if (dom.toggleCollapse && !dom.toggleCollapse.disabled) {
+            dom.toggleCollapse.click();
+          }
+        }
+        
+        // Ctrl+Shift+L: 重置布局
+        if (e.ctrlKey && e.shiftKey && !e.altKey && e.key === 'L') {
+          e.preventDefault();
+          if (dom.resetLayout && !dom.resetLayout.disabled) {
+            dom.resetLayout.click();
+          }
+        }
+      });
+    }
+
+    // 初始化功能
+    // 确保DOM已加载
+    setTimeout(() => {
+      initMenuDropdowns();
+      initKeyboardShortcuts();  // 初始化键盘快捷键
+      // 初始化时强制隐藏重排排序按钮
+      if (dom.rebalanceSort) {
+        dom.rebalanceSort.setAttribute('style', 'display: none !important;');
+      }
+      // 然后根据实际情况更新可见性
+      updateSortButtonVisibility();
+    }, 100);
+    initLayoutResizers();
+    initMain().catch(err => {
+      console.error('初始化失败', err);
+      showToast('初始化失败，请刷新页面重试。', 'error');
+    });
+  </script>
+</body>
+</html>

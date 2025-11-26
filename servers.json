@@ -1,0 +1,16 @@
+[
+  {
+    "DbPath": "C:/Users/T490/OneDrive/Database/treedb/test.db",
+    "Port": 3100,
+    "TableName": "tool",
+    "IdField": "id",
+    "ParentField": "parent_id"
+  },
+  {
+    "DbPath": "C:/Users/T490/OneDrive/Database/treedb/another.db",
+    "Port": 3101,
+    "TableName": "other_table",
+    "IdField": "id",
+    "ParentField": "parent"
+  }
+]

@@ -1,0 +1,8 @@
+[
+  { "id": 1, "parent_id": null, "name": "总部", "manager": "Alice", "budget": 3000000 },
+  { "id": 2, "parent_id": 1, "name": "财务部", "manager": "Bob", "budget": 800000 },
+  { "id": 3, "parent_id": 1, "name": "技术部", "manager": "Carol", "budget": 1200000 },
+  { "id": 4, "parent_id": 3, "name": "后端组", "manager": "David", "budget": 450000 },
+  { "id": 5, "parent_id": 3, "name": "前端组", "manager": "Eve", "budget": 420000 },
+  { "id": 6, "parent_id": 2, "name": "出纳室", "manager": "Frank", "budget": 210000 }
+]
